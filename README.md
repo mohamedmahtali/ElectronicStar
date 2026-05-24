@@ -92,6 +92,12 @@ Interface web de demo :
 xdg-open http://localhost:8000/ui/
 ```
 
+Page detail produit :
+
+```bash
+xdg-open http://localhost:8000/ui/product/<PRODUCT_ID>
+```
+
 Healthcheck :
 
 ```bash

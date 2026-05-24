@@ -18,6 +18,21 @@ const appState = {
   merchant: null,
 };
 
+function productDetailPath(productId) {
+  return `/ui/product/${encodeURIComponent(productId)}`;
+}
+
+function currentRouteProductId() {
+  const match = window.location.pathname.match(/^\/ui\/product\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function resetRouteToSearch() {
+  if (currentRouteProductId()) {
+    history.pushState({}, "", "/ui/");
+  }
+}
+
 function formatPrice(value) {
   if (value === null || value === undefined) return "Prix indisponible";
   return new Intl.NumberFormat("fr-FR", {
@@ -89,7 +104,8 @@ function buildSearchParams() {
   return params;
 }
 
-async function searchProducts() {
+async function searchProducts(options = {}) {
+  const { autoSelect = true } = options;
   const params = buildSearchParams();
   const query = params.get("q");
   resultTitle.textContent = `Résultats pour « ${query} »`;
@@ -110,7 +126,7 @@ async function searchProducts() {
       setStateCard("empty", "Aucun résultat", "Essaie une autre marque, une référence MPN ou un budget plus large.");
     } else {
       clearMessages();
-      if (!appState.selectedProductId) {
+      if (autoSelect && !appState.selectedProductId) {
         selectProduct(data.items[0].product_id);
       }
     }
@@ -129,7 +145,7 @@ function renderResults(products) {
     const label = merchantCount > 1 ? `${merchantCount} marchands` : `${merchantCount} marchand`;
 
     return `
-      <button class="result-card ${isSelected ? "is-selected" : ""}" data-product-id="${product.product_id}">
+      <a class="result-card ${isSelected ? "is-selected" : ""}" href="${productDetailPath(product.product_id)}" data-product-id="${product.product_id}">
         <span class="thumb" aria-hidden="true">${productIcon(product)}</span>
         <span class="result-main">
           <span class="result-title">${product.title}</span>
@@ -145,12 +161,15 @@ function renderResults(products) {
           <span class="price-amount">${formatPrice(product.price_min)}</span>
           ${hasRange ? `<span class="price-range">jusqu'a ${formatPrice(product.price_max)}</span>` : ""}
         </span>
-      </button>
+      </a>
     `;
   }).join("");
 
-  document.querySelectorAll("[data-product-id]").forEach((button) => {
-    button.addEventListener("click", () => selectProduct(button.dataset.productId));
+  document.querySelectorAll("[data-product-id]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      selectProduct(link.dataset.productId);
+    });
   });
 }
 
@@ -161,11 +180,15 @@ function renderSearchMerchantChips(product) {
   `).join("");
 }
 
-async function selectProduct(productId) {
+async function selectProduct(productId, options = {}) {
+  const { updateUrl = true } = options;
   appState.selectedProductId = productId;
+  if (updateUrl && currentRouteProductId() !== productId) {
+    history.pushState({ productId }, "", productDetailPath(productId));
+  }
   renderResults(appState.products);
 
-  const product = appState.products.find((item) => item.product_id === productId);
+  const product = appState.products.find((item) => item.product_id === productId) || {};
   detailPanel.innerHTML = `
     <div class="detail-content">
       <div class="skeleton"></div>
@@ -183,6 +206,42 @@ async function selectProduct(productId) {
         <div class="empty-icon">!</div>
         <h2>Offres indisponibles</h2>
         <p>Impossible de charger les offres pour ce produit.</p>
+      </div>
+    `;
+  }
+}
+
+async function loadProductRoute(productId) {
+  appState.selectedProductId = productId;
+  renderMerchantFilters();
+  setLoading();
+  resultTitle.textContent = "Détail produit";
+  resultCount.textContent = "Chargement";
+  activeQuery.textContent = `produit: ${productId.slice(0, 8)}`;
+  detailPanel.innerHTML = `
+    <div class="detail-content">
+      <div class="skeleton"></div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch(`/products/${encodeURIComponent(productId)}`);
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const detail = await response.json();
+    const querySeed = detail.brand || detail.title.split(/\s+/)[0] || "xiaomi";
+
+    input.value = querySeed;
+    renderDetail(detail, detail.offers || []);
+    await searchProducts({ autoSelect: false });
+  } catch (error) {
+    resultCount.textContent = "Erreur";
+    resultList.innerHTML = "";
+    setStateCard("error", "Produit introuvable", "Vérifie l'UUID ou relance une recherche.");
+    detailPanel.innerHTML = `
+      <div class="empty-detail">
+        <div class="empty-icon">!</div>
+        <h2>Produit introuvable</h2>
+        <p>Ce détail produit n'est pas disponible.</p>
       </div>
     `;
   }
@@ -262,11 +321,13 @@ function renderOffer(offer, isBest) {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   appState.selectedProductId = null;
+  resetRouteToSearch();
   searchProducts();
 });
 
 applyFilters.addEventListener("click", () => {
   appState.selectedProductId = null;
+  resetRouteToSearch();
   searchProducts();
 });
 
@@ -275,6 +336,7 @@ merchantFilters.forEach((button) => {
     const nextMerchant = button.dataset.merchant;
     appState.merchant = appState.merchant === nextMerchant ? null : nextMerchant;
     appState.selectedProductId = null;
+    resetRouteToSearch();
     searchProducts();
   });
 });
@@ -285,4 +347,19 @@ function renderMerchantFilters() {
   });
 }
 
-searchProducts();
+window.addEventListener("popstate", () => {
+  const productId = currentRouteProductId();
+  if (productId) {
+    loadProductRoute(productId);
+  } else {
+    appState.selectedProductId = null;
+    searchProducts();
+  }
+});
+
+const initialProductId = currentRouteProductId();
+if (initialProductId) {
+  loadProductRoute(initialProductId);
+} else {
+  searchProducts();
+}

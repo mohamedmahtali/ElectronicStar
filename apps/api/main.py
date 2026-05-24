@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.api.src.routers import products, search
@@ -27,6 +27,11 @@ app.include_router(products.router)
 
 WEB_STATIC_DIR = Path(__file__).resolve().parents[1] / "web" / "static"
 if WEB_STATIC_DIR.exists():
+
+    @app.get("/ui/product/{product_id}", include_in_schema=False)
+    async def ui_product_detail(product_id: str):
+        return FileResponse(WEB_STATIC_DIR / "index.html")
+
     app.mount("/ui", StaticFiles(directory=WEB_STATIC_DIR, html=True), name="ui")
 
 
