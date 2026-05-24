@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ElectronicStar</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/ui/" aria-label="ElectronicStar">
+          <span class="brand-mark">★</span>
+          <span><strong>Electronic</strong><em>Star</em></span>
+        </a>
+
+        <form class="search-form" id="search-form">
+          <label class="sr-only" for="search-input">Recherche produit</label>
+          <input
+            id="search-input"
+            name="q"
+            type="search"
+            value="xiaomi"
+            autocomplete="off"
+            placeholder="Rechercher un produit, une marque, une référence..."
+          />
+          <button type="submit">Rechercher</button>
+        </form>
+      </header>
+
+      <main class="layout">
+        <aside class="filters" aria-label="Filtres">
+          <section>
+            <h2>Filtres</h2>
+            <label>
+              Marque
+              <input id="brand-filter" type="text" placeholder="xiaomi, lenovo..." />
+            </label>
+            <div class="range-row">
+              <label>
+                Min
+                <input id="min-price-filter" type="number" min="0" step="1" placeholder="0" />
+              </label>
+              <label>
+                Max
+                <input id="max-price-filter" type="number" min="0" step="1" placeholder="500" />
+              </label>
+            </div>
+            <button class="ghost-button" id="apply-filters" type="button">Appliquer</button>
+          </section>
+
+          <section>
+            <h2>Marchands</h2>
+            <div class="merchant-list">
+              <button class="merchant-chip merchant-chip--ldlc merchant-filter" data-merchant="ldlc" type="button">LDLC</button>
+              <button class="merchant-chip merchant-chip--materiel merchant-filter" data-merchant="materiel" type="button">Materiel.net</button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="results-panel" aria-live="polite">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Comparateur high-tech</p>
+              <h1 id="result-title">Recherche produits</h1>
+            </div>
+            <div class="result-count" id="result-count">0 produit</div>
+          </div>
+
+          <div class="toolbar">
+            <span class="active-filter" id="active-query">query: xiaomi</span>
+            <span class="active-filter">disponibilité: en stock</span>
+          </div>
+
+          <div class="state" id="state"></div>
+          <div class="result-list" id="result-list"></div>
+        </section>
+
+        <section class="detail-panel" id="detail-panel" aria-live="polite">
+          <div class="empty-detail">
+            <div class="empty-icon">↗</div>
+            <h2>Sélectionne un produit</h2>
+            <p>Les offres marchands, le meilleur prix et les liens externes apparaîtront ici.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
