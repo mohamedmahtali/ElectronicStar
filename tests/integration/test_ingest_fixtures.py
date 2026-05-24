@@ -82,6 +82,9 @@ async def test_ingest_fixtures_end_to_end():
             product_detail_response = await _get_product_detail(
                 canonical_product_id, session
             )
+            price_history_response = await _get_price_history_response(
+                canonical_product_id, session
+            )
             offers_response = await _get_offers_response(canonical_product_id, session)
             lenovo_search_response = await _search_products(session, es, "lenovo")
             xiaomi_ldlc_response = await _search_products(
@@ -108,6 +111,17 @@ async def test_ingest_fixtures_end_to_end():
             for merchant in product_detail_response.merchants
         } == {"ldlc", "materiel"}
         assert len(product_detail_response.offers) == 2
+        assert len(price_history_response.points) == 3
+        assert {point.merchant_slug for point in price_history_response.points} == {
+            "ldlc",
+            "materiel",
+        }
+        assert [
+            point.price_amount
+            for point in price_history_response.points
+            if point.merchant_slug == "ldlc"
+        ] == [499.95, 479.95]
+        assert min(point.total_amount for point in price_history_response.points) == 479.95
         assert {offer.merchant_slug for offer in offers_response.offers} == {"ldlc", "materiel"}
         assert {offer.merchant_name for offer in offers_response.offers} == {"LDLC", "Materiel.net"}
         assert lenovo_search_response.total == 1
@@ -234,6 +248,12 @@ async def _get_product_detail(product_id, session):
     from apps.api.src.routers.products import get_product_detail
 
     return await get_product_detail(product_id, session)
+
+
+async def _get_price_history_response(product_id, session):
+    from apps.api.src.routers.products import get_product_price_history
+
+    return await get_product_price_history(product_id, session)
 
 
 async def _search_products(session, es, q: str, merchant: str | None = None):

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.src.db.models import Merchant, Offer, Product
+from apps.api.src.db.models import Merchant, Offer, PriceHistory, Product
 from apps.api.src.db.session import get_db
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -49,6 +49,23 @@ class ProductDetailResponse(BaseModel):
     offers: list[OfferOut]
 
 
+class PriceHistoryPointOut(BaseModel):
+    offer_id: str
+    merchant_id: str
+    merchant_slug: str
+    merchant_name: str
+    captured_at: str
+    price_amount: float
+    shipping_amount: float
+    total_amount: float
+    availability: str
+
+
+class PriceHistoryResponse(BaseModel):
+    product_id: str
+    points: list[PriceHistoryPointOut]
+
+
 @router.get("/{product_id}", response_model=ProductDetailResponse)
 async def get_product_detail(
     product_id: uuid.UUID,
@@ -80,6 +97,20 @@ async def get_product_detail(
     )
 
 
+@router.get("/{product_id}/price-history", response_model=PriceHistoryResponse)
+async def get_product_price_history(
+    product_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    product = await _load_product(product_id, db)
+    rows = await _load_price_history(product_id, db)
+
+    return PriceHistoryResponse(
+        product_id=str(product.id),
+        points=_serialize_price_history(rows),
+    )
+
+
 @router.get("/{product_id}/offers", response_model=OffersResponse)
 async def get_product_offers(
     product_id: uuid.UUID,
@@ -96,10 +127,7 @@ async def get_product_offers(
 async def _load_product_and_offers(
     product_id: uuid.UUID, db: AsyncSession
 ) -> tuple[Product, list[tuple[Offer, Merchant]]]:
-    result = await db.execute(select(Product).where(Product.id == product_id))
-    product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail="Produit introuvable")
+    product = await _load_product(product_id, db)
 
     offers_result = await db.execute(
         select(Offer, Merchant)
@@ -109,6 +137,27 @@ async def _load_product_and_offers(
     )
     offers = list(offers_result.all())
     return product, offers
+
+
+async def _load_product(product_id: uuid.UUID, db: AsyncSession) -> Product:
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Produit introuvable")
+    return product
+
+
+async def _load_price_history(
+    product_id: uuid.UUID, db: AsyncSession
+) -> list[tuple[PriceHistory, Offer, Merchant]]:
+    result = await db.execute(
+        select(PriceHistory, Offer, Merchant)
+        .join(Offer, Offer.id == PriceHistory.offer_id)
+        .join(Merchant, Merchant.id == Offer.merchant_id)
+        .where(Offer.product_id == product_id)
+        .order_by(PriceHistory.captured_at, Merchant.slug, Offer.id)
+    )
+    return list(result.all())
 
 
 def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
@@ -126,4 +175,23 @@ def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
             last_seen_at=offer.last_seen_at.isoformat(),
         )
         for offer, merchant in offers
+    ]
+
+
+def _serialize_price_history(
+    rows: list[tuple[PriceHistory, Offer, Merchant]],
+) -> list[PriceHistoryPointOut]:
+    return [
+        PriceHistoryPointOut(
+            offer_id=str(offer.id),
+            merchant_id=str(merchant.id),
+            merchant_slug=merchant.slug,
+            merchant_name=merchant.display_name,
+            captured_at=history.captured_at.isoformat(),
+            price_amount=float(history.price_amount),
+            shipping_amount=float(history.shipping_amount),
+            total_amount=float(history.price_amount + history.shipping_amount),
+            availability=history.availability,
+        )
+        for history, offer, merchant in rows
     ]

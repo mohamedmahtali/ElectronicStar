@@ -41,6 +41,28 @@ function formatPrice(value) {
   }).format(value);
 }
 
+function formatSignedPrice(value) {
+  if (value === null || value === undefined) return "N/A";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatPrice(value)}`;
+}
+
+function formatShortDate(value) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatDay(value) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(value));
+}
+
 function merchantClass(value) {
   const normalized = (value || "").toLowerCase();
   if (normalized.includes("ldlc")) return "merchant-chip--ldlc";
@@ -274,6 +296,16 @@ function renderDetail(product, offers) {
         </div>
       </section>
 
+      <section class="price-history" id="price-history-panel">
+        <div class="offers-head">
+          <h3>Historique des prix</h3>
+          <span id="price-history-count">Chargement</span>
+        </div>
+        <div class="price-history-body" id="price-history-body">
+          <div class="skeleton skeleton--compact"></div>
+        </div>
+      </section>
+
       <div class="offers-head">
         <h3>Offres marchands</h3>
         <span>${sortedOffers.length} ${sortedOffers.length > 1 ? "offres" : "offre"}</span>
@@ -284,6 +316,8 @@ function renderDetail(product, offers) {
       </div>
     </div>
   `;
+
+  renderPriceHistory(product.product_id || appState.selectedProductId);
 }
 
 function renderOffer(offer, isBest) {
@@ -315,6 +349,123 @@ function renderOffer(offer, isBest) {
         Voir l'offre
       </a>
     </article>
+  `;
+}
+
+async function renderPriceHistory(productId) {
+  const body = document.querySelector("#price-history-body");
+  const count = document.querySelector("#price-history-count");
+  if (!body || !count || !productId) return;
+
+  try {
+    const response = await fetch(`/products/${encodeURIComponent(productId)}/price-history`);
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    if (appState.selectedProductId !== productId) return;
+
+    const points = data.points || [];
+    count.textContent = `${points.length} ${points.length > 1 ? "points" : "point"}`;
+    body.innerHTML = renderPriceHistoryBody(points);
+  } catch (error) {
+    count.textContent = "Erreur";
+    body.innerHTML = `<div class="history-empty">Historique indisponible.</div>`;
+  }
+}
+
+function renderPriceHistoryBody(points) {
+  if (points.length === 0) {
+    return `<div class="history-empty">Aucun relevé de prix pour le moment.</div>`;
+  }
+
+  const totals = points.map((point) => point.total_amount);
+  const best = Math.min(...totals);
+  const latestByMerchant = latestPointsByMerchant(points);
+  const currentBest = Math.min(...latestByMerchant.map((point) => point.total_amount));
+  const change = latestPriceChange(points);
+
+  return `
+    <div class="history-metrics">
+      <div>
+        <span>Meilleur actuel</span>
+        <strong>${formatPrice(currentBest)}</strong>
+      </div>
+      <div>
+        <span>Plus bas observé</span>
+        <strong>${formatPrice(best)}</strong>
+      </div>
+      <div>
+        <span>Dernière variation</span>
+        <strong class="${changeClass(change)}">${change ? formatSignedPrice(change.amount) : "N/A"}</strong>
+      </div>
+    </div>
+    <div class="history-bars" aria-label="Historique des prix">
+      ${renderHistoryBars(points)}
+    </div>
+    <div class="history-list">
+      ${points.slice(-5).reverse().map(renderHistoryPoint).join("")}
+    </div>
+  `;
+}
+
+function latestPointsByMerchant(points) {
+  const byMerchant = new Map();
+  points.forEach((point) => {
+    byMerchant.set(point.merchant_id, point);
+  });
+  return [...byMerchant.values()];
+}
+
+function latestPriceChange(points) {
+  const byOffer = new Map();
+  points.forEach((point) => {
+    const group = byOffer.get(point.offer_id) || [];
+    group.push(point);
+    byOffer.set(point.offer_id, group);
+  });
+
+  return [...byOffer.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => {
+      const previous = group[group.length - 2];
+      const latest = group[group.length - 1];
+      return {
+        amount: latest.total_amount - previous.total_amount,
+        capturedAt: latest.captured_at,
+      };
+    })
+    .sort((a, b) => new Date(b.capturedAt) - new Date(a.capturedAt))[0] || null;
+}
+
+function changeClass(change) {
+  if (!change || change.amount === 0) return "history-change";
+  return change.amount < 0 ? "history-change is-good" : "history-change is-bad";
+}
+
+function renderHistoryBars(points) {
+  const visiblePoints = points.slice(-8);
+  const totals = visiblePoints.map((point) => point.total_amount);
+  const min = Math.min(...totals);
+  const max = Math.max(...totals);
+  const spread = Math.max(max - min, 1);
+
+  return visiblePoints.map((point) => {
+    const height = 26 + ((point.total_amount - min) / spread) * 54;
+    return `
+      <div class="history-bar" title="${point.merchant_name} - ${formatPrice(point.total_amount)}">
+        <span style="height: ${height}px"></span>
+        <small>${formatDay(point.captured_at)}</small>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderHistoryPoint(point) {
+  return `
+    <div class="history-row">
+      <span class="merchant-chip ${merchantClass(point.merchant_slug)}">${point.merchant_name}</span>
+      <span>${formatShortDate(point.captured_at)}</span>
+      <strong>${formatPrice(point.total_amount)}</strong>
+    </div>
   `;
 }
 
