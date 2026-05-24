@@ -4,6 +4,7 @@ from apps.api.main import app, WEB_STATIC_DIR
 def test_product_detail_deep_link_route_precedes_static_mount():
     route_paths = [getattr(route, "path", None) for route in app.router.routes]
 
+    assert route_paths.index("/ui/demo") < route_paths.index("/ui")
     assert route_paths.index("/ui/product/{product_id}") < route_paths.index("/ui")
 
 

@@ -28,6 +28,10 @@ app.include_router(products.router)
 WEB_STATIC_DIR = Path(__file__).resolve().parents[1] / "web" / "static"
 if WEB_STATIC_DIR.exists():
 
+    @app.get("/ui/demo", include_in_schema=False)
+    async def ui_demo():
+        return FileResponse(WEB_STATIC_DIR / "index.html")
+
     @app.get("/ui/product/{product_id}", include_in_schema=False)
     async def ui_product_detail(product_id: str):
         return FileResponse(WEB_STATIC_DIR / "index.html")

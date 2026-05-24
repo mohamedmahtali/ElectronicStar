@@ -31,8 +31,12 @@ function currentRouteProductId() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function isDemoRoute() {
+  return /^\/ui\/demo\/?$/.test(window.location.pathname);
+}
+
 function resetRouteToSearch() {
-  if (currentRouteProductId()) {
+  if (currentRouteProductId() || isDemoRoute()) {
     history.pushState({}, "", "/ui/");
   }
 }
@@ -271,6 +275,56 @@ async function loadProductRoute(productId) {
       </div>
     `;
   }
+}
+
+async function loadDemoRoute() {
+  appState.selectedProductId = null;
+  appState.merchant = null;
+  input.value = "lenovo";
+  renderMerchantFilters();
+  setLoading();
+  resultTitle.textContent = "Démo ElectronicStar";
+  resultCount.textContent = "Recherche";
+  activeQuery.textContent = "demo: meilleur produit comparable";
+  detailPanel.innerHTML = `
+    <div class="empty-detail">
+      <div class="empty-icon">↗</div>
+      <h2>Préparation de la démo</h2>
+      <p>Recherche du produit avec plusieurs marchands et historique de prix.</p>
+    </div>
+  `;
+
+  try {
+    const response = await fetch("/search/products?q=lenovo&size=10");
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    const product = findDemoProduct(data.items || []);
+
+    if (!product) {
+      throw new Error("No demo product");
+    }
+
+    history.replaceState({ productId: product.product_id }, "", productDetailPath(product.product_id));
+    await loadProductRoute(product.product_id);
+  } catch (error) {
+    resultCount.textContent = "Erreur";
+    resultList.innerHTML = "";
+    setStateCard("error", "Démo indisponible", "Relance le seed de demo puis recharge /ui/demo.");
+    detailPanel.innerHTML = `
+      <div class="empty-detail">
+        <div class="empty-icon">!</div>
+        <h2>Démo indisponible</h2>
+        <p>Aucun produit comparable n'est prêt pour l'instant.</p>
+      </div>
+    `;
+  }
+}
+
+function findDemoProduct(products) {
+  return products.find((product) => {
+    const merchantCount = (product.merchants || product.merchant_ids || []).length;
+    return merchantCount > 1;
+  }) || products[0] || null;
 }
 
 function renderDetail(product, offers) {
@@ -585,6 +639,8 @@ window.addEventListener("popstate", () => {
   const productId = currentRouteProductId();
   if (productId) {
     loadProductRoute(productId);
+  } else if (isDemoRoute()) {
+    loadDemoRoute();
   } else {
     appState.selectedProductId = null;
     searchProducts();
@@ -594,6 +650,8 @@ window.addEventListener("popstate", () => {
 const initialProductId = currentRouteProductId();
 if (initialProductId) {
   loadProductRoute(initialProductId);
+} else if (isDemoRoute()) {
+  loadDemoRoute();
 } else {
   searchProducts();
 }

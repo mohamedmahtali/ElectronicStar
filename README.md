@@ -92,6 +92,12 @@ Interface web de demo :
 xdg-open http://localhost:8000/ui/
 ```
 
+Demo produit comparable :
+
+```bash
+xdg-open http://localhost:8000/ui/demo
+```
+
 Page detail produit :
 
 ```bash
