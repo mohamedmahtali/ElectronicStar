@@ -22,6 +22,10 @@ function productDetailPath(productId) {
   return `/ui/product/${encodeURIComponent(productId)}`;
 }
 
+function productAbsoluteUrl(productId) {
+  return `${window.location.origin}${productDetailPath(productId)}`;
+}
+
 function currentRouteProductId() {
   const match = window.location.pathname.match(/^\/ui\/product\/([^/]+)\/?$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -293,6 +297,12 @@ function renderDetail(product, offers) {
           </div>
           <div class="detail-price">${formatPrice(bestTotal)}</div>
           <div class="price-range">Fourchette ${formatPrice(product.price_min)} - ${formatPrice(product.price_max)}</div>
+          <div class="detail-actions">
+            <button class="copy-link-button" type="button" data-copy-product-link="${product.product_id || appState.selectedProductId}">
+              Copier le lien
+            </button>
+            <span class="price-change-badge" id="price-change-badge">Variation en cours</span>
+          </div>
         </div>
       </section>
 
@@ -317,7 +327,51 @@ function renderDetail(product, offers) {
     </div>
   `;
 
+  bindDetailActions(product.product_id || appState.selectedProductId);
   renderPriceHistory(product.product_id || appState.selectedProductId);
+}
+
+function bindDetailActions(productId) {
+  const copyButton = document.querySelector("[data-copy-product-link]");
+  if (!copyButton || !productId) return;
+
+  copyButton.addEventListener("click", () => {
+    copyProductLink(productId, copyButton);
+  });
+}
+
+async function copyProductLink(productId, button) {
+  const originalLabel = button.textContent.trim();
+  button.disabled = true;
+
+  try {
+    await copyText(productAbsoluteUrl(productId));
+    button.textContent = "Lien copié";
+  } catch (error) {
+    button.textContent = "Copie impossible";
+  } finally {
+    window.setTimeout(() => {
+      button.textContent = originalLabel;
+      button.disabled = false;
+    }, 1400);
+  }
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }
 
 function renderOffer(offer, isBest) {
@@ -365,11 +419,40 @@ async function renderPriceHistory(productId) {
 
     const points = data.points || [];
     count.textContent = `${points.length} ${points.length > 1 ? "points" : "point"}`;
+    updatePriceChangeBadge(points);
     body.innerHTML = renderPriceHistoryBody(points);
   } catch (error) {
     count.textContent = "Erreur";
+    updatePriceChangeBadge([]);
     body.innerHTML = `<div class="history-empty">Historique indisponible.</div>`;
   }
+}
+
+function updatePriceChangeBadge(points) {
+  const badge = document.querySelector("#price-change-badge");
+  if (!badge) return;
+
+  const change = latestPriceChange(points);
+  badge.className = "price-change-badge";
+
+  if (!change) {
+    badge.textContent = points.length > 0 ? "Prix stable" : "Pas encore de variation";
+    return;
+  }
+
+  if (change.amount < 0) {
+    badge.textContent = `Baisse ${formatSignedPrice(change.amount)}`;
+    badge.classList.add("is-good");
+    return;
+  }
+
+  if (change.amount > 0) {
+    badge.textContent = `Hausse ${formatSignedPrice(change.amount)}`;
+    badge.classList.add("is-bad");
+    return;
+  }
+
+  badge.textContent = "Prix stable";
 }
 
 function renderPriceHistoryBody(points) {

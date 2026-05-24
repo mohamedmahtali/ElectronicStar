@@ -534,6 +534,58 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.copy-link-button {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.copy-link-button:hover {
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.copy-link-button:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.price-change-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-tint);
+  color: var(--muted);
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.price-change-badge.is-good {
+  background: var(--green-soft);
+  color: #166534;
+}
+
+.price-change-badge.is-bad {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
 .offers-head {
   display: flex;
   justify-content: space-between;
