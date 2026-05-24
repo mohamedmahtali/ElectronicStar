@@ -41,6 +41,27 @@ docker compose exec api python -m apps.api.scripts.seed
 docker compose exec api python -m apps.api.scripts.es_setup
 ```
 
+## Démo rapide
+
+La démo stable reset Postgres/Elasticsearch, recharge les fixtures LDLC + Materiel.net,
+puis ouvre automatiquement le produit comparable Lenovo avec deux marchands et un historique de baisse de prix :
+
+```bash
+DOCKER_SUDO=1 make demo-reset-ingest
+sudo docker compose restart api
+xdg-open http://localhost:8000/ui/demo
+```
+
+Si Docker ne demande pas `sudo` sur ta machine :
+
+```bash
+make demo-reset-ingest
+docker compose restart api
+xdg-open http://localhost:8000/ui/demo
+```
+
+![Démo ElectronicStar](docs/demo.png)
+
 ## Ingestion de démo
 
 LDLC peut être bloqué réseau selon l'IP du container. Pour une démo stable, utiliser les fixtures déjà générées :
