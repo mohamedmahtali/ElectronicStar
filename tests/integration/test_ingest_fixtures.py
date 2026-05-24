@@ -79,6 +79,9 @@ async def test_ingest_fixtures_end_to_end():
                 session, "gtin:0199271991237"
             )
             canonical_offer_count = await _canonical_offer_count(session, "gtin:0199271991237")
+            product_detail_response = await _get_product_detail(
+                canonical_product_id, session
+            )
             offers_response = await _get_offers_response(canonical_product_id, session)
             lenovo_search_response = await _search_products(session, es, "lenovo")
             xiaomi_ldlc_response = await _search_products(
@@ -97,6 +100,14 @@ async def test_ingest_fixtures_end_to_end():
         }
         assert current_price == Decimal("479.95")
         assert canonical_offer_count == 2
+        assert product_detail_response.canonical_key == "gtin:0199271991237"
+        assert product_detail_response.price_min == 479.95
+        assert product_detail_response.price_max == 489.95
+        assert {
+            merchant.merchant_slug
+            for merchant in product_detail_response.merchants
+        } == {"ldlc", "materiel"}
+        assert len(product_detail_response.offers) == 2
         assert {offer.merchant_slug for offer in offers_response.offers} == {"ldlc", "materiel"}
         assert {offer.merchant_name for offer in offers_response.offers} == {"LDLC", "Materiel.net"}
         assert lenovo_search_response.total == 1
@@ -217,6 +228,12 @@ async def _get_offers_response(product_id, session):
     from apps.api.src.routers.products import get_product_offers
 
     return await get_product_offers(product_id, session)
+
+
+async def _get_product_detail(product_id, session):
+    from apps.api.src.routers.products import get_product_detail
+
+    return await get_product_detail(product_id, session)
 
 
 async def _search_products(session, es, q: str, merchant: str | None = None):

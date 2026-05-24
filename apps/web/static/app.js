@@ -173,10 +173,10 @@ async function selectProduct(productId) {
   `;
 
   try {
-    const response = await fetch(`/products/${productId}/offers`);
+    const response = await fetch(`/products/${productId}`);
     if (!response.ok) throw new Error(`API ${response.status}`);
-    const data = await response.json();
-    renderDetail(product, data.offers);
+    const detail = await response.json();
+    renderDetail({ ...product, ...detail }, detail.offers);
   } catch (error) {
     detailPanel.innerHTML = `
       <div class="empty-detail">

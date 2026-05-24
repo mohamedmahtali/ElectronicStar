@@ -116,6 +116,12 @@ Offres d'un produit :
 curl -s "http://localhost:8000/products/<PRODUCT_ID>/offers" | python3 -m json.tool
 ```
 
+Detail complet d'un produit :
+
+```bash
+curl -s "http://localhost:8000/products/<PRODUCT_ID>" | python3 -m json.tool
+```
+
 Remplacer `<PRODUCT_ID>` par un UUID retourné par la recherche.
 
 ## Tests
