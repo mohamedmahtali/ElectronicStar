@@ -33,6 +33,10 @@ if WEB_STATIC_DIR.exists():
     async def ui_demo():
         return FileResponse(WEB_STATIC_DIR / "index.html")
 
+    @app.get("/ui/ops", include_in_schema=False)
+    async def ui_ops():
+        return FileResponse(WEB_STATIC_DIR / "index.html")
+
     @app.get("/ui/product/{product_id}", include_in_schema=False)
     async def ui_product_detail(product_id: str):
         return FileResponse(WEB_STATIC_DIR / "index.html")

@@ -5,6 +5,7 @@ def test_product_detail_deep_link_route_precedes_static_mount():
     route_paths = [getattr(route, "path", None) for route in app.router.routes]
 
     assert route_paths.index("/ui/demo") < route_paths.index("/ui")
+    assert route_paths.index("/ui/ops") < route_paths.index("/ui")
     assert route_paths.index("/ui/product/{product_id}") < route_paths.index("/ui")
 
 
@@ -20,6 +21,7 @@ def test_ui_shell_includes_crawl_status_panel():
 
     assert 'id="crawl-status"' in html
     assert 'id="run-materiel-crawl"' in html
+    assert 'href="/ui/ops"' in html
 
 
 def test_ui_crawl_trigger_uses_admin_token_header():
@@ -27,3 +29,11 @@ def test_ui_crawl_trigger_uses_admin_token_header():
 
     assert "electronicstar.opsAdminToken" in js
     assert '"X-Admin-Token"' in js
+
+
+def test_ui_ops_route_has_dashboard_renderer():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "function isOpsRoute()" in js
+    assert "async function loadOpsRoute()" in js
+    assert "function renderOpsDashboard" in js

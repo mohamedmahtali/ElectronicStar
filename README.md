@@ -172,6 +172,12 @@ Demo produit comparable :
 xdg-open http://localhost:8000/ui/demo
 ```
 
+Dashboard ops :
+
+```bash
+xdg-open http://localhost:8000/ui/ops
+```
+
 Page detail produit :
 
 ```bash

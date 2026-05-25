@@ -13,6 +13,7 @@ const detailPanel = document.querySelector("#detail-panel");
 const crawlStatus = document.querySelector("#crawl-status");
 const runMaterielCrawl = document.querySelector("#run-materiel-crawl");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
+const topNavLinks = document.querySelectorAll(".top-nav a");
 const OPS_ADMIN_TOKEN_STORAGE_KEY = "electronicstar.opsAdminToken";
 
 const appState = {
@@ -38,10 +39,24 @@ function isDemoRoute() {
   return /^\/ui\/demo\/?$/.test(window.location.pathname);
 }
 
+function isOpsRoute() {
+  return /^\/ui\/ops\/?$/.test(window.location.pathname);
+}
+
 function resetRouteToSearch() {
-  if (currentRouteProductId() || isDemoRoute()) {
+  if (currentRouteProductId() || isDemoRoute() || isOpsRoute()) {
     history.pushState({}, "", "/ui/");
   }
+}
+
+function syncNavigation() {
+  topNavLinks.forEach((link) => {
+    const targetPath = new URL(link.href, window.location.origin).pathname;
+    const isActive = targetPath === "/ui/ops"
+      ? isOpsRoute()
+      : !isOpsRoute();
+    link.classList.toggle("is-active", isActive);
+  });
 }
 
 function formatPrice(value) {
@@ -155,6 +170,7 @@ function buildSearchParams() {
 
 async function searchProducts(options = {}) {
   const { autoSelect = true } = options;
+  syncNavigation();
   const params = buildSearchParams();
   const query = params.get("q");
   resultTitle.textContent = `Résultats pour « ${query} »`;
@@ -261,6 +277,7 @@ async function selectProduct(productId, options = {}) {
 }
 
 async function loadProductRoute(productId) {
+  syncNavigation();
   appState.selectedProductId = productId;
   renderMerchantFilters();
   setLoading();
@@ -297,6 +314,7 @@ async function loadProductRoute(productId) {
 }
 
 async function loadDemoRoute() {
+  syncNavigation();
   appState.selectedProductId = null;
   appState.merchant = null;
   input.value = "lenovo";
@@ -344,6 +362,178 @@ function findDemoProduct(products) {
     const merchantCount = (product.merchants || product.merchant_ids || []).length;
     return merchantCount > 1;
   }) || products[0] || null;
+}
+
+async function loadOpsRoute() {
+  syncNavigation();
+  appState.selectedProductId = null;
+  appState.products = [];
+  renderMerchantFilters();
+  resultTitle.textContent = "Pilotage des crawls";
+  resultCount.textContent = "Ops";
+  activeQuery.textContent = "ops: crawls";
+  state.innerHTML = "";
+  resultList.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
+  detailPanel.innerHTML = `
+    <div class="detail-content">
+      <div class="skeleton"></div>
+    </div>
+  `;
+
+  const token = savedOpsAdminToken();
+  if (!token) {
+    renderOpsLocked("Cle admin requise", "Saisis la cle ops pour consulter les crawls et relancer Materiel.net.");
+    return;
+  }
+
+  try {
+    const response = await fetch("/ops/crawl-runs?limit=50", {
+      headers: opsAdminHeaders(token),
+    });
+    if (response.status === 401 || response.status === 403) {
+      forgetOpsAdminToken();
+      renderOpsLocked("Cle admin invalide", "La cle stockee a ete refusee. Saisis une nouvelle cle.");
+      return;
+    }
+    if (!response.ok) throw new Error(`API ${response.status}`);
+
+    const data = await response.json();
+    renderOpsDashboard(data.runs || []);
+  } catch (error) {
+    resultCount.textContent = "Erreur";
+    resultList.innerHTML = "";
+    setStateCard("error", "Ops indisponible", "Verifie que l'API tourne et que OPS_ADMIN_TOKEN est configure.");
+    detailPanel.innerHTML = `
+      <div class="empty-detail">
+        <div class="empty-icon">!</div>
+        <h2>Dashboard indisponible</h2>
+        <p>Impossible de charger les statuts de crawl.</p>
+      </div>
+    `;
+  }
+}
+
+function renderOpsLocked(title, message) {
+  resultCount.textContent = "Verrouille";
+  resultList.innerHTML = "";
+  setStateCard("empty", title, message);
+  detailPanel.innerHTML = `
+    <div class="detail-content">
+      <section class="detail-hero">
+        <span class="thumb" aria-hidden="true">🔐</span>
+        <div>
+          <p class="eyebrow">Ops securise</p>
+          <h2>${title}</h2>
+          <p>${message}</p>
+          <div class="detail-actions">
+            <button class="copy-link-button" id="ops-token-button" type="button">Saisir la cle</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+  document.querySelector("#ops-token-button")?.addEventListener("click", () => {
+    if (requestOpsAdminToken()) {
+      loadOpsRoute();
+      loadCrawlStatus();
+    }
+  });
+}
+
+function renderOpsDashboard(runs) {
+  const latestRun = runs[0] || null;
+  const runningCount = runs.filter((run) => run.status === "running").length;
+  const failedCount = runs.filter((run) => run.status === "failed").length;
+  const successCount = runs.filter((run) => run.status === "success").length;
+  resultCount.textContent = `${runs.length} ${runs.length > 1 ? "runs" : "run"}`;
+  clearMessages();
+
+  resultList.innerHTML = `
+    <div class="ops-summary">
+      <div class="ops-metric"><span>Total</span><strong>${runs.length}</strong></div>
+      <div class="ops-metric"><span>En cours</span><strong>${runningCount}</strong></div>
+      <div class="ops-metric"><span>Succes</span><strong>${successCount}</strong></div>
+      <div class="ops-metric"><span>Erreurs</span><strong>${failedCount}</strong></div>
+    </div>
+    ${runs.length ? runs.map(renderOpsRunCard).join("") : `<div class="history-empty">Aucun crawl enregistre.</div>`}
+  `;
+
+  detailPanel.innerHTML = `
+    <div class="detail-content">
+      <section class="detail-hero">
+        <span class="thumb" aria-hidden="true">⚙️</span>
+        <div>
+          <p class="eyebrow">Scheduler</p>
+          <h2>Materiel.net</h2>
+          <div class="meta-row">
+            <span class="merchant-chip merchant-chip--materiel">Materiel.net</span>
+            ${latestRun ? `<span class="crawl-status-badge">${crawlStatusLabel(latestRun.status)}</span>` : ""}
+          </div>
+          <div class="detail-actions">
+            <button class="crawl-run-button" id="ops-run-materiel-crawl" type="button">Relancer Materiel.net</button>
+            <button class="copy-link-button" id="ops-refresh-button" type="button">Rafraichir</button>
+          </div>
+        </div>
+      </section>
+      ${latestRun ? renderOpsRunDetail(latestRun) : `<div class="history-empty">Aucun run a detailler.</div>`}
+    </div>
+  `;
+
+  document.querySelector("#ops-run-materiel-crawl")?.addEventListener("click", triggerMaterielCrawl);
+  document.querySelector("#ops-refresh-button")?.addEventListener("click", () => {
+    loadOpsRoute();
+    loadCrawlStatus();
+  });
+}
+
+function renderOpsRunCard(run) {
+  return `
+    <article class="ops-run-card crawl-run--${run.status}">
+      <div class="ops-run-main">
+        <div class="ops-run-title">
+          <span>${run.merchant_name}</span>
+          <span class="crawl-status-badge">${crawlStatusLabel(run.status)}</span>
+          <span class="range-badge">${run.run_type}</span>
+        </div>
+        <div class="ops-run-meta">${formatShortDate(run.started_at)} · ${run.crawl_run_id.slice(0, 8)}</div>
+      </div>
+      <div class="ops-cell"><span>Items</span><strong>${run.items_scraped}</strong></div>
+      <div class="ops-cell"><span>Pages OK</span><strong>${run.pages_ok}</strong></div>
+      <div class="ops-cell"><span>Pages KO</span><strong>${run.pages_failed}</strong></div>
+      <div class="ops-cell"><span>Duree</span><strong>${formatDuration(run.duration_seconds)}</strong></div>
+    </article>
+  `;
+}
+
+function renderOpsRunDetail(run) {
+  return `
+    <section class="price-history">
+      <div class="offers-head">
+        <h3>Dernier run</h3>
+        <span>${formatDuration(run.duration_seconds)}</span>
+      </div>
+      <div class="ops-detail-grid">
+        ${renderOpsDetailRow("Statut", crawlStatusLabel(run.status))}
+        ${renderOpsDetailRow("Debut", formatShortDate(run.started_at))}
+        ${renderOpsDetailRow("Fin", run.ended_at ? formatShortDate(run.ended_at) : "En cours")}
+        ${renderOpsDetailRow("Items", String(run.items_scraped))}
+        ${renderOpsDetailRow("Pages", `${run.pages_ok} OK / ${run.pages_failed} KO`)}
+        ${renderOpsDetailRow("Captcha", `${run.captcha_count} captcha / ${run.blocked_count} blocages`)}
+        ${renderOpsDetailRow("Ingestion", run.ingest_enabled ? "Active" : "Desactive")}
+        ${renderOpsDetailRow("Sortie", run.output_path || "N/A")}
+        ${run.error_message ? renderOpsDetailRow("Erreur", run.error_message) : ""}
+      </div>
+    </section>
+  `;
+}
+
+function renderOpsDetailRow(label, value) {
+  return `
+    <div class="ops-detail-row">
+      <span>${label}</span>
+      <strong>${value}</strong>
+    </div>
+  `;
 }
 
 function renderDetail(product, offers) {
@@ -683,8 +873,9 @@ async function loadCrawlStatus() {
   }
 }
 
-async function triggerMaterielCrawl() {
-  if (!runMaterielCrawl) return;
+async function triggerMaterielCrawl(event) {
+  const button = event?.currentTarget || runMaterielCrawl;
+  if (!button) return;
   const token = requestOpsAdminToken();
   if (!token) {
     if (crawlStatus) {
@@ -693,9 +884,9 @@ async function triggerMaterielCrawl() {
     return;
   }
 
-  const originalLabel = runMaterielCrawl.textContent.trim();
-  runMaterielCrawl.disabled = true;
-  runMaterielCrawl.textContent = "Demande envoyée";
+  const originalLabel = button.textContent.trim();
+  button.disabled = true;
+  button.textContent = "Demande envoyée";
 
   try {
     const response = await fetch("/ops/crawl-runs/materiel/run", {
@@ -708,15 +899,21 @@ async function triggerMaterielCrawl() {
     }
     if (!response.ok) throw new Error(`API ${response.status}`);
     await loadCrawlStatus();
+    if (isOpsRoute()) {
+      await loadOpsRoute();
+    }
   } catch (error) {
     if (crawlStatus) {
       crawlStatus.innerHTML = `<div class="crawl-status-empty">Relance impossible</div>`;
     }
   } finally {
     window.setTimeout(() => {
-      runMaterielCrawl.textContent = originalLabel;
-      runMaterielCrawl.disabled = false;
+      button.textContent = originalLabel;
+      button.disabled = false;
       loadCrawlStatus();
+      if (isOpsRoute()) {
+        loadOpsRoute();
+      }
     }, 1600);
   }
 }
@@ -771,6 +968,8 @@ window.addEventListener("popstate", () => {
     loadProductRoute(productId);
   } else if (isDemoRoute()) {
     loadDemoRoute();
+  } else if (isOpsRoute()) {
+    loadOpsRoute();
   } else {
     appState.selectedProductId = null;
     searchProducts();
@@ -783,6 +982,8 @@ if (initialProductId) {
   loadProductRoute(initialProductId);
 } else if (isDemoRoute()) {
   loadDemoRoute();
+} else if (isOpsRoute()) {
+  loadOpsRoute();
 } else {
   searchProducts();
 }
