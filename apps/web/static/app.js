@@ -11,6 +11,7 @@ const state = document.querySelector("#state");
 const resultList = document.querySelector("#result-list");
 const detailPanel = document.querySelector("#detail-panel");
 const crawlStatus = document.querySelector("#crawl-status");
+const runMaterielCrawl = document.querySelector("#run-materiel-crawl");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
 
 const appState = {
@@ -90,6 +91,7 @@ function crawlStatusLabel(value) {
     success: "OK",
     failed: "Erreur",
     running: "En cours",
+    queued: "En attente",
   };
   return labels[value] || value || "Inconnu";
 }
@@ -645,6 +647,10 @@ merchantFilters.forEach((button) => {
   });
 });
 
+if (runMaterielCrawl) {
+  runMaterielCrawl.addEventListener("click", triggerMaterielCrawl);
+}
+
 function renderMerchantFilters() {
   merchantFilters.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.merchant === appState.merchant);
@@ -661,6 +667,29 @@ async function loadCrawlStatus() {
     renderCrawlStatus(data.runs || []);
   } catch (error) {
     crawlStatus.innerHTML = `<div class="crawl-status-empty">Indisponible</div>`;
+  }
+}
+
+async function triggerMaterielCrawl() {
+  if (!runMaterielCrawl) return;
+  const originalLabel = runMaterielCrawl.textContent.trim();
+  runMaterielCrawl.disabled = true;
+  runMaterielCrawl.textContent = "Demande envoyée";
+
+  try {
+    const response = await fetch("/ops/crawl-runs/materiel/run", { method: "POST" });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    await loadCrawlStatus();
+  } catch (error) {
+    if (crawlStatus) {
+      crawlStatus.innerHTML = `<div class="crawl-status-empty">Relance impossible</div>`;
+    }
+  } finally {
+    window.setTimeout(() => {
+      runMaterielCrawl.textContent = originalLabel;
+      runMaterielCrawl.disabled = false;
+      loadCrawlStatus();
+    }, 1600);
   }
 }
 

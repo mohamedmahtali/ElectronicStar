@@ -117,6 +117,10 @@ services:
       - /app/apps/crawler/scheduled
       - --log-level
       - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --request-queue
+      - ${CRAWLER_REQUEST_QUEUE:-crawler:run_requests}
+      - --request-poll-seconds
+      - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
       - --ingest
     volumes:
       - ./apps/crawler:/app/apps/crawler

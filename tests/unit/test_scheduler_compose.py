@@ -11,6 +11,7 @@ def test_docker_compose_defines_supervised_materiel_scheduler():
     assert "apps.crawler.scripts.scheduler" in compose
     assert "--merchant" in compose
     assert "materiel" in compose
+    assert "--request-queue" in compose
     assert "--ingest" in compose
 
 

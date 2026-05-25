@@ -179,6 +179,12 @@ Derniers statuts de crawl :
 curl -s http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
 ```
 
+Relancer Materiel.net via le scheduler :
+
+```bash
+curl -s -X POST http://localhost:8000/ops/crawl-runs/materiel/run | python3 -m json.tool
+```
+
 Healthcheck :
 
 ```bash

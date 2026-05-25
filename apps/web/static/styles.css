@@ -284,6 +284,31 @@ button {
   gap: 8px;
 }
 
+.crawl-run-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 32px;
+  margin-bottom: 10px;
+  border: 1px solid var(--orange);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.crawl-run-button:hover {
+  background: var(--orange);
+  color: #fff;
+}
+
+.crawl-run-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .crawl-run {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -330,6 +355,11 @@ button {
 .crawl-run--failed .crawl-status-badge {
   background: var(--red-soft);
   color: var(--red);
+}
+
+.crawl-run--queued .crawl-status-badge {
+  background: var(--surface-tint);
+  color: var(--muted);
 }
 
 .crawl-status-empty {

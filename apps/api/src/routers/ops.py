@@ -1,7 +1,13 @@
+import json
+import os
+import uuid
 from datetime import datetime
+from pathlib import PurePosixPath
 
-from fastapi import APIRouter, Depends, Query
+import redis.asyncio as redis
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +15,7 @@ from apps.api.src.db.models import CrawlRun, Merchant
 from apps.api.src.db.session import get_db
 
 router = APIRouter(prefix="/ops", tags=["ops"])
+DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
 
 
 class CrawlRunOut(BaseModel):
@@ -35,6 +42,13 @@ class CrawlRunsResponse(BaseModel):
     runs: list[CrawlRunOut]
 
 
+class CrawlRunTriggerResponse(BaseModel):
+    crawl_run_id: str
+    merchant_slug: str
+    status: str
+    queued: bool
+
+
 @router.get("/crawl-runs", response_model=CrawlRunsResponse)
 async def list_crawl_runs(
     limit: int = Query(default=20, ge=1, le=100),
@@ -56,6 +70,57 @@ async def list_latest_crawl_runs(db: AsyncSession = Depends(get_db)):
     return CrawlRunsResponse(runs=_serialize_crawl_runs(latest_rows))
 
 
+@router.post(
+    "/crawl-runs/{merchant_slug}/run",
+    response_model=CrawlRunTriggerResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def trigger_crawl_run(
+    merchant_slug: str,
+    itemcount: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    merchant = await _load_merchant(db, merchant_slug)
+    crawl_run_id = uuid.uuid4()
+    output_path = _manual_output_path(merchant.slug, crawl_run_id)
+
+    run = CrawlRun(
+        id=crawl_run_id,
+        merchant_id=merchant.id,
+        run_type="manual",
+        status="queued",
+        ingest_enabled=True,
+        output_path=output_path,
+    )
+    db.add(run)
+    await db.commit()
+
+    payload = {
+        "crawl_run_id": str(crawl_run_id),
+        "merchant": merchant.slug,
+        "itemcount": itemcount,
+        "ingest": True,
+        "output": output_path,
+        "log_level": os.getenv("CRAWLER_LOG_LEVEL", "INFO"),
+    }
+
+    try:
+        await _enqueue_crawl_request(payload)
+    except RedisError as exc:
+        await _mark_run_failed(db, crawl_run_id, f"RedisError: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File Redis indisponible",
+        ) from exc
+
+    return CrawlRunTriggerResponse(
+        crawl_run_id=str(crawl_run_id),
+        merchant_slug=merchant.slug,
+        status="queued",
+        queued=True,
+    )
+
+
 async def _load_crawl_runs(
     db: AsyncSession,
     *,
@@ -68,6 +133,51 @@ async def _load_crawl_runs(
         .limit(limit)
     )
     return list(result.all())
+
+
+async def _load_merchant(db: AsyncSession, merchant_slug: str) -> Merchant:
+    result = await db.execute(select(Merchant).where(Merchant.slug == merchant_slug))
+    merchant = result.scalar_one_or_none()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Marchand introuvable")
+    return merchant
+
+
+async def _enqueue_crawl_request(payload: dict) -> None:
+    client = redis.Redis.from_url(_redis_url(), decode_responses=True)
+    try:
+        await client.rpush(_request_queue(), json.dumps(payload))
+    finally:
+        await client.aclose()
+
+
+async def _mark_run_failed(
+    db: AsyncSession,
+    crawl_run_id: uuid.UUID,
+    error_message: str,
+) -> None:
+    run = await db.get(CrawlRun, crawl_run_id)
+    if run is None:
+        return
+    run.status = "failed"
+    run.ended_at = datetime.now().astimezone()
+    run.error_message = error_message
+    await db.commit()
+
+
+def _manual_output_path(merchant_slug: str, crawl_run_id: uuid.UUID) -> str:
+    return str(
+        PurePosixPath("/app/apps/crawler/scheduled")
+        / f"{merchant_slug}_manual_{str(crawl_run_id)[:8]}.json"
+    )
+
+
+def _redis_url() -> str:
+    return os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+
+def _request_queue() -> str:
+    return os.getenv("CRAWLER_REQUEST_QUEUE", DEFAULT_REQUEST_QUEUE)
 
 
 def _serialize_crawl_runs(rows: list[tuple[CrawlRun, Merchant]]) -> list[CrawlRunOut]:

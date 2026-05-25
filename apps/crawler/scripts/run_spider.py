@@ -82,11 +82,17 @@ def run_spider(
     ingest: bool,
     log_level: str,
     status_log: bool | None = None,
+    crawl_run_id: uuid.UUID | None = None,
 ) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    should_log_status = ingest if status_log is None else status_log
+    should_log_status = crawl_run_id is not None or (ingest if status_log is None else status_log)
     run_id = (
-        _safe_create_crawl_run(spider=spider, output=output, ingest=ingest)
+        _safe_start_crawl_run(
+            crawl_run_id=crawl_run_id,
+            spider=spider,
+            output=output,
+            ingest=ingest,
+        )
         if should_log_status
         else None
     )
@@ -120,15 +126,28 @@ def run_spider(
     print(f"Crawl finished: spider={spider} output={output} ingest={ingest}")
 
 
-def _safe_create_crawl_run(
+def _safe_start_crawl_run(
     *,
+    crawl_run_id: uuid.UUID | None,
     spider: str,
     output: Path,
     ingest: bool,
 ) -> uuid.UUID | None:
     try:
+        if crawl_run_id is not None:
+            return asyncio.run(
+                _start_existing_crawl_run(
+                    crawl_run_id=crawl_run_id,
+                    output=output,
+                    ingest=ingest,
+                )
+            )
         return asyncio.run(
-            _create_crawl_run(spider=spider, output=output, ingest=ingest)
+            _create_crawl_run(
+                spider=spider,
+                output=output,
+                ingest=ingest,
+            )
         )
     except Exception as exc:
         print(
@@ -194,6 +213,39 @@ async def _create_crawl_run(
         await engine.dispose()
 
 
+async def _start_existing_crawl_run(
+    *,
+    crawl_run_id: uuid.UUID,
+    output: Path,
+    ingest: bool,
+) -> uuid.UUID:
+    engine = _create_status_engine()
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as session:
+            await session.execute(
+                update(CrawlRun)
+                .where(CrawlRun.id == crawl_run_id)
+                .values(
+                    started_at=datetime.now(UTC),
+                    ended_at=None,
+                    status="running",
+                    items_scraped=0,
+                    pages_ok=0,
+                    pages_failed=0,
+                    captcha_count=0,
+                    blocked_count=0,
+                    ingest_enabled=ingest,
+                    output_path=str(output),
+                    error_message=None,
+                )
+            )
+            await session.commit()
+            return crawl_run_id
+    finally:
+        await engine.dispose()
+
+
 async def _finish_crawl_run(
     *,
     run_id: uuid.UUID,
@@ -252,6 +304,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Record this crawl in the crawl_runs status table.",
     )
+    parser.add_argument(
+        "--crawl-run-id",
+        type=uuid.UUID,
+        default=None,
+        help="Update an existing crawl_runs row instead of creating a new one.",
+    )
     args = parser.parse_args()
     if args.output is None:
         args.output = default_output_path(args.spider)
@@ -267,6 +325,7 @@ def main() -> None:
         ingest=args.ingest,
         log_level=args.log_level,
         status_log=args.status_log or args.ingest,
+        crawl_run_id=args.crawl_run_id,
     )
 
 

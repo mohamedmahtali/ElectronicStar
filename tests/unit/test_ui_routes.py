@@ -19,3 +19,4 @@ def test_ui_shell_includes_crawl_status_panel():
     html = (WEB_STATIC_DIR / "index.html").read_text()
 
     assert 'id="crawl-status"' in html
+    assert 'id="run-materiel-crawl"' in html

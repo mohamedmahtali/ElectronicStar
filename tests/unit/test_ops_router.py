@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from apps.api.src.routers.ops import _serialize_crawl_runs
+from apps.api.src.routers.ops import _manual_output_path, _serialize_crawl_runs
 
 
 def test_serialize_crawl_runs_includes_status_metrics():
@@ -40,3 +40,11 @@ def test_serialize_crawl_runs_includes_status_metrics():
     assert item.duration_seconds == 62.523
     assert item.ingest_enabled is True
     assert item.error_message is None
+
+
+def test_manual_output_path_uses_crawl_run_prefix():
+    crawl_run_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
+
+    assert _manual_output_path("materiel", crawl_run_id) == (
+        "/app/apps/crawler/scheduled/materiel_manual_12345678.json"
+    )
