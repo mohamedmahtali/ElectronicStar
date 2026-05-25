@@ -11,7 +11,7 @@ def test_serialize_price_history_includes_merchant_and_total():
     merchant_id = uuid.uuid4()
     history = SimpleNamespace(
         captured_at=datetime(2026, 5, 24, 15, 30, tzinfo=UTC),
-        price_amount=Decimal("479.95"),
+        price_amount=Decimal("499.95"),
         shipping_amount=Decimal("4.99"),
         availability="in_stock",
     )
@@ -29,9 +29,9 @@ def test_serialize_price_history_includes_merchant_and_total():
     assert points[0].merchant_id == str(merchant_id)
     assert points[0].merchant_slug == "ldlc"
     assert points[0].merchant_name == "LDLC"
-    assert points[0].price_amount == 479.95
+    assert points[0].price_amount == 499.95
     assert points[0].shipping_amount == 4.99
-    assert points[0].total_amount == 484.94
+    assert points[0].total_amount == 504.94
     assert points[0].captured_at == "2026-05-24T15:30:00+00:00"
 
 
@@ -49,7 +49,7 @@ def test_offers_csv_includes_product_and_offer_rows():
         merchant_slug="ldlc",
         merchant_name="LDLC",
         seller_name=None,
-        price_amount=479.95,
+        price_amount=499.95,
         shipping_amount=0.0,
         availability="in_stock",
         condition="new",
@@ -62,7 +62,7 @@ def test_offers_csv_includes_product_and_offer_rows():
     assert "product_id,canonical_key,title,brand,merchant_slug" in content
     assert str(product_id) in content
     assert "Lenovo V15 G5 IRL" in content
-    assert "479.95,0.00,479.95" in content
+    assert "499.95,0.00,499.95" in content
 
 
 def test_price_history_csv_includes_total_and_sanitizes_formula_cells():

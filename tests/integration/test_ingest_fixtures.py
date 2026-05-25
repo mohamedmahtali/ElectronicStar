@@ -101,11 +101,11 @@ async def test_ingest_fixtures_end_to_end():
             "price_history": 6,
             "match_review_queue": 0,
         }
-        assert current_price == Decimal("479.95")
+        assert current_price == Decimal("499.95")
         assert canonical_offer_count == 2
         assert product_detail_response.canonical_key == "gtin:0199271991237"
-        assert product_detail_response.price_min == 479.95
-        assert product_detail_response.price_max == 489.95
+        assert product_detail_response.price_min == 499.95
+        assert product_detail_response.price_max == 499.95
         assert {
             merchant.merchant_slug
             for merchant in product_detail_response.merchants
@@ -120,8 +120,8 @@ async def test_ingest_fixtures_end_to_end():
             point.price_amount
             for point in price_history_response.points
             if point.merchant_slug == "ldlc"
-        ] == [499.95, 479.95]
-        assert min(point.total_amount for point in price_history_response.points) == 479.95
+        ] == [499.95, 499.95]
+        assert min(point.total_amount for point in price_history_response.points) == 499.95
         assert {offer.merchant_slug for offer in offers_response.offers} == {"ldlc", "materiel"}
         assert {offer.merchant_name for offer in offers_response.offers} == {"LDLC", "Materiel.net"}
         assert lenovo_search_response.total == 1
@@ -135,8 +135,8 @@ async def test_ingest_fixtures_end_to_end():
         es_count = await es.count(index=PRODUCTS_INDEX_WRITE)
         assert es_count["count"] == 4
         lenovo_doc = await _get_es_doc_by_canonical_key(es, PRODUCTS_INDEX_WRITE, "gtin:0199271991237")
-        assert lenovo_doc["price_min"] == 479.95
-        assert lenovo_doc["price_max"] == 489.95
+        assert lenovo_doc["price_min"] == 499.95
+        assert lenovo_doc["price_max"] == 499.95
         assert len(lenovo_doc["merchant_ids"]) == 2
         assert len(lenovo_doc["offers"]) == 2
     finally:

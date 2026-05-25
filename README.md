@@ -304,7 +304,7 @@ Ce test vérifie aussi le scénario coeur du comparateur :
 - un même Lenovo présent chez LDLC et Materiel.net avec le même GTIN
 - un seul produit canonique
 - deux offres marchands rattachées au produit
-- `price_min = 479.95` et `price_max = 489.95` dans Elasticsearch
+- `price_min = 499.95` et `price_max = 499.95` dans Elasticsearch
 
 ## Reset de démo
 
@@ -320,7 +320,7 @@ Si Docker demande les droits root :
 DOCKER_SUDO=1 make demo-reset-ingest
 ```
 
-Par défaut, cette commande charge les fixtures d'intégration qui prouvent le matching inter-marchands : Lenovo LDLC + Materiel.net, avec `price_min = 479.95` et `price_max = 489.95`.
+Par défaut, cette commande charge les fixtures d'intégration qui prouvent le matching inter-marchands : Lenovo LDLC + Materiel.net, avec `price_min = 499.95` et `price_max = 499.95`.
 
 Pour recharger les fixtures live plus volumineuses générées par crawl :
 
