@@ -27,6 +27,10 @@ cp .env.example .env
 docker compose up -d
 ```
 
+Avant d'exposer l'API ailleurs que sur ta machine, remplace `OPS_ADMIN_TOKEN`
+dans `.env`. Cette clé protège les routes opérationnelles `/ops`.
+Si ton fichier `.env` existe déjà, ajoute simplement cette ligne puis redémarre l'API.
+
 Vérifier les services :
 
 ```bash
@@ -151,6 +155,7 @@ Paramètres dans `.env` :
 CRAWLER_MATERIEL_INTERVAL_MINUTES=60
 CRAWLER_MATERIEL_ITEMCOUNT=20
 CRAWLER_LOG_LEVEL=INFO
+OPS_ADMIN_TOKEN=change-me-local-admin-token
 ```
 
 ## API
@@ -176,14 +181,20 @@ xdg-open http://localhost:8000/ui/product/<PRODUCT_ID>
 Derniers statuts de crawl :
 
 ```bash
-curl -s http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
+export OPS_ADMIN_TOKEN=change-me-local-admin-token
+curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
 ```
 
 Relancer Materiel.net via le scheduler :
 
 ```bash
-curl -s -X POST http://localhost:8000/ops/crawl-runs/materiel/run | python3 -m json.tool
+curl -s -X POST -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/crawl-runs/materiel/run | python3 -m json.tool
 ```
+
+Dans l'interface web, le bouton de relance demande cette clé admin la première fois,
+puis la conserve dans le stockage local du navigateur.
 
 Healthcheck :
 
@@ -303,10 +314,11 @@ Prêt :
 - agrégation Elasticsearch `price_min` / `price_max` validée
 - historique de prix
 - 2 marchands réels
+- scheduler Materiel.net supervisé avec relance manuelle
+- routes `/ops` protégées par `OPS_ADMIN_TOKEN`
 
 Reste hors MVP coeur :
 
-- scheduler de crawl production supervisé
 - dashboard ops et review manuelle
 - CI
 - monitoring

@@ -13,6 +13,7 @@ const detailPanel = document.querySelector("#detail-panel");
 const crawlStatus = document.querySelector("#crawl-status");
 const runMaterielCrawl = document.querySelector("#run-materiel-crawl");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
+const OPS_ADMIN_TOKEN_STORAGE_KEY = "electronicstar.opsAdminToken";
 
 const appState = {
   selectedProductId: null,
@@ -659,9 +660,21 @@ function renderMerchantFilters() {
 
 async function loadCrawlStatus() {
   if (!crawlStatus) return;
+  const token = savedOpsAdminToken();
+  if (!token) {
+    crawlStatus.innerHTML = `<div class="crawl-status-empty">Cle admin requise</div>`;
+    return;
+  }
 
   try {
-    const response = await fetch("/ops/crawl-runs/latest");
+    const response = await fetch("/ops/crawl-runs/latest", {
+      headers: opsAdminHeaders(token),
+    });
+    if (response.status === 401 || response.status === 403) {
+      forgetOpsAdminToken();
+      crawlStatus.innerHTML = `<div class="crawl-status-empty">Cle admin invalide</div>`;
+      return;
+    }
     if (!response.ok) throw new Error(`API ${response.status}`);
     const data = await response.json();
     renderCrawlStatus(data.runs || []);
@@ -672,12 +685,27 @@ async function loadCrawlStatus() {
 
 async function triggerMaterielCrawl() {
   if (!runMaterielCrawl) return;
+  const token = requestOpsAdminToken();
+  if (!token) {
+    if (crawlStatus) {
+      crawlStatus.innerHTML = `<div class="crawl-status-empty">Cle admin requise</div>`;
+    }
+    return;
+  }
+
   const originalLabel = runMaterielCrawl.textContent.trim();
   runMaterielCrawl.disabled = true;
   runMaterielCrawl.textContent = "Demande envoyée";
 
   try {
-    const response = await fetch("/ops/crawl-runs/materiel/run", { method: "POST" });
+    const response = await fetch("/ops/crawl-runs/materiel/run", {
+      method: "POST",
+      headers: opsAdminHeaders(token),
+    });
+    if (response.status === 401 || response.status === 403) {
+      forgetOpsAdminToken();
+      throw new Error("Token admin invalide");
+    }
     if (!response.ok) throw new Error(`API ${response.status}`);
     await loadCrawlStatus();
   } catch (error) {
@@ -691,6 +719,32 @@ async function triggerMaterielCrawl() {
       loadCrawlStatus();
     }, 1600);
   }
+}
+
+function savedOpsAdminToken() {
+  return window.localStorage.getItem(OPS_ADMIN_TOKEN_STORAGE_KEY) || "";
+}
+
+function requestOpsAdminToken() {
+  const savedToken = savedOpsAdminToken();
+  if (savedToken) return savedToken;
+
+  const token = window.prompt("Cle admin ops");
+  const cleanToken = token ? token.trim() : "";
+  if (!cleanToken) return "";
+
+  window.localStorage.setItem(OPS_ADMIN_TOKEN_STORAGE_KEY, cleanToken);
+  return cleanToken;
+}
+
+function forgetOpsAdminToken() {
+  window.localStorage.removeItem(OPS_ADMIN_TOKEN_STORAGE_KEY);
+}
+
+function opsAdminHeaders(token) {
+  return {
+    "X-Admin-Token": token,
+  };
 }
 
 function renderCrawlStatus(runs) {

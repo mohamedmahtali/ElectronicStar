@@ -20,3 +20,10 @@ def test_ui_shell_includes_crawl_status_panel():
 
     assert 'id="crawl-status"' in html
     assert 'id="run-materiel-crawl"' in html
+
+
+def test_ui_crawl_trigger_uses_admin_token_header():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "electronicstar.opsAdminToken" in js
+    assert '"X-Admin-Token"' in js

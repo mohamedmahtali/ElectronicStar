@@ -1,11 +1,12 @@
 import json
 import os
+import secrets
 import uuid
 from datetime import datetime
 from pathlib import PurePosixPath
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 from sqlalchemy import select
@@ -14,8 +15,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.src.db.models import CrawlRun, Merchant
 from apps.api.src.db.session import get_db
 
-router = APIRouter(prefix="/ops", tags=["ops"])
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
+
+
+def require_ops_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
+    expected_token = os.getenv("OPS_ADMIN_TOKEN", "").strip()
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OPS_ADMIN_TOKEN non configure",
+        )
+
+    if x_admin_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token admin requis",
+        )
+
+    if not secrets.compare_digest(x_admin_token, expected_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token admin invalide",
+        )
+
+
+router = APIRouter(
+    prefix="/ops",
+    tags=["ops"],
+    dependencies=[Depends(require_ops_admin_token)],
+)
 
 
 class CrawlRunOut(BaseModel):
