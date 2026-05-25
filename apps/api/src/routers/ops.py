@@ -133,7 +133,7 @@ async def trigger_crawl_run(
     }
 
     try:
-        await _enqueue_crawl_request(payload)
+        await _enqueue_crawl_request(payload, merchant.slug)
     except RedisError as exc:
         await _mark_run_failed(db, crawl_run_id, f"RedisError: {exc}")
         raise HTTPException(
@@ -171,10 +171,10 @@ async def _load_merchant(db: AsyncSession, merchant_slug: str) -> Merchant:
     return merchant
 
 
-async def _enqueue_crawl_request(payload: dict) -> None:
+async def _enqueue_crawl_request(payload: dict, merchant_slug: str) -> None:
     client = redis.Redis.from_url(_redis_url(), decode_responses=True)
     try:
-        await client.rpush(_request_queue(), json.dumps(payload))
+        await client.rpush(_request_queue(merchant_slug), json.dumps(payload))
     finally:
         await client.aclose()
 
@@ -204,8 +204,19 @@ def _redis_url() -> str:
     return os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 
-def _request_queue() -> str:
-    return os.getenv("CRAWLER_REQUEST_QUEUE", DEFAULT_REQUEST_QUEUE)
+def _request_queue(merchant_slug: str | None = None) -> str:
+    base_queue = os.getenv("CRAWLER_REQUEST_QUEUE", DEFAULT_REQUEST_QUEUE).strip()
+    if not base_queue:
+        base_queue = DEFAULT_REQUEST_QUEUE
+
+    if merchant_slug is None:
+        return base_queue
+
+    env_name = f"CRAWLER_{merchant_slug.upper().replace('-', '_')}_REQUEST_QUEUE"
+    merchant_queue = os.getenv(env_name, "").strip()
+    if merchant_queue:
+        return merchant_queue
+    return f"{base_queue}:{merchant_slug}"
 
 
 def _serialize_crawl_runs(rows: list[tuple[CrawlRun, Merchant]]) -> list[CrawlRunOut]:

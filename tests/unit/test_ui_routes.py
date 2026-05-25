@@ -21,6 +21,9 @@ def test_ui_shell_includes_crawl_status_panel():
 
     assert 'id="crawl-status"' in html
     assert 'id="run-materiel-crawl"' in html
+    assert 'id="run-ldlc-crawl"' in html
+    assert 'data-crawl-merchant="materiel"' in html
+    assert 'data-crawl-merchant="ldlc"' in html
     assert 'href="/ui/ops"' in html
 
 
@@ -29,6 +32,8 @@ def test_ui_crawl_trigger_uses_admin_token_header():
 
     assert "electronicstar.opsAdminToken" in js
     assert '"X-Admin-Token"' in js
+    assert "async function triggerCrawlRun" in js
+    assert "/ops/crawl-runs/" in js
 
 
 def test_ui_ops_route_has_dashboard_renderer():
@@ -39,6 +44,7 @@ def test_ui_ops_route_has_dashboard_renderer():
     assert "function renderOpsDashboard" in js
     assert "ops-change-token-button" in js
     assert "function changeOpsAdminToken()" in js
+    assert "CRAWL_MERCHANTS" in js
 
 
 def test_ui_product_detail_includes_csv_exports():

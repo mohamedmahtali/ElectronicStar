@@ -11,10 +11,14 @@ const state = document.querySelector("#state");
 const resultList = document.querySelector("#result-list");
 const detailPanel = document.querySelector("#detail-panel");
 const crawlStatus = document.querySelector("#crawl-status");
-const runMaterielCrawl = document.querySelector("#run-materiel-crawl");
+const crawlRunButtons = document.querySelectorAll("[data-crawl-merchant]");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
 const topNavLinks = document.querySelectorAll(".top-nav a");
 const OPS_ADMIN_TOKEN_STORAGE_KEY = "electronicstar.opsAdminToken";
+const CRAWL_MERCHANTS = [
+  { slug: "materiel", name: "Materiel.net" },
+  { slug: "ldlc", name: "LDLC" },
+];
 
 const appState = {
   selectedProductId: null,
@@ -100,6 +104,10 @@ function merchantClass(value) {
   if (normalized.includes("ldlc")) return "merchant-chip--ldlc";
   if (normalized.includes("materiel")) return "merchant-chip--materiel";
   return "merchant-chip--unknown";
+}
+
+function merchantDisplayName(slug) {
+  return CRAWL_MERCHANTS.find((merchant) => merchant.slug === slug)?.name || slug;
 }
 
 function crawlStatusLabel(value) {
@@ -382,7 +390,7 @@ async function loadOpsRoute() {
 
   const token = savedOpsAdminToken();
   if (!token) {
-    renderOpsLocked("Cle admin requise", "Saisis la cle ops pour consulter les crawls et relancer Materiel.net.");
+    renderOpsLocked("Cle admin requise", "Saisis la cle ops pour consulter les crawls et relancer les marchands.");
     return;
   }
 
@@ -458,14 +466,18 @@ function renderOpsDashboard(runs) {
       <section class="detail-hero">
         <span class="thumb" aria-hidden="true">⚙️</span>
         <div>
-          <p class="eyebrow">Scheduler</p>
-          <h2>Materiel.net</h2>
+          <p class="eyebrow">Schedulers</p>
+          <h2>LDLC & Materiel.net</h2>
           <div class="meta-row">
-            <span class="merchant-chip merchant-chip--materiel">Materiel.net</span>
+            ${CRAWL_MERCHANTS.map((merchant) => `
+              <span class="merchant-chip ${merchantClass(merchant.slug)}">${merchant.name}</span>
+            `).join("")}
             ${latestRun ? `<span class="crawl-status-badge">${crawlStatusLabel(latestRun.status)}</span>` : ""}
           </div>
           <div class="detail-actions">
-            <button class="crawl-run-button" id="ops-run-materiel-crawl" type="button">Relancer Materiel.net</button>
+            ${CRAWL_MERCHANTS.map((merchant) => `
+              <button class="crawl-run-button" data-crawl-merchant="${merchant.slug}" type="button">Relancer ${merchant.name}</button>
+            `).join("")}
             <button class="copy-link-button" id="ops-refresh-button" type="button">Rafraichir</button>
             <button class="copy-link-button" id="ops-change-token-button" type="button">Changer la cle</button>
           </div>
@@ -475,7 +487,9 @@ function renderOpsDashboard(runs) {
     </div>
   `;
 
-  document.querySelector("#ops-run-materiel-crawl")?.addEventListener("click", triggerMaterielCrawl);
+  detailPanel.querySelectorAll("[data-crawl-merchant]").forEach((button) => {
+    button.addEventListener("click", triggerCrawlRun);
+  });
   document.querySelector("#ops-refresh-button")?.addEventListener("click", () => {
     loadOpsRoute();
     loadCrawlStatus();
@@ -841,9 +855,9 @@ merchantFilters.forEach((button) => {
   });
 });
 
-if (runMaterielCrawl) {
-  runMaterielCrawl.addEventListener("click", triggerMaterielCrawl);
-}
+crawlRunButtons.forEach((button) => {
+  button.addEventListener("click", triggerCrawlRun);
+});
 
 function renderMerchantFilters() {
   merchantFilters.forEach((button) => {
@@ -876,9 +890,11 @@ async function loadCrawlStatus() {
   }
 }
 
-async function triggerMaterielCrawl(event) {
-  const button = event?.currentTarget || runMaterielCrawl;
+async function triggerCrawlRun(event) {
+  const button = event?.currentTarget;
   if (!button) return;
+  const merchant = button.dataset.crawlMerchant || "materiel";
+  const merchantName = merchantDisplayName(merchant);
   const token = requestOpsAdminToken();
   if (!token) {
     if (crawlStatus) {
@@ -892,7 +908,7 @@ async function triggerMaterielCrawl(event) {
   button.textContent = "Demande envoyée";
 
   try {
-    const response = await fetch("/ops/crawl-runs/materiel/run", {
+    const response = await fetch(`/ops/crawl-runs/${encodeURIComponent(merchant)}/run`, {
       method: "POST",
       headers: opsAdminHeaders(token),
     });
@@ -907,7 +923,7 @@ async function triggerMaterielCrawl(event) {
     }
   } catch (error) {
     if (crawlStatus) {
-      crawlStatus.innerHTML = `<div class="crawl-status-empty">Relance impossible</div>`;
+      crawlStatus.innerHTML = `<div class="crawl-status-empty">Relance ${merchantName} impossible</div>`;
     }
   } finally {
     window.setTimeout(() => {

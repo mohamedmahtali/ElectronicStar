@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from apps.api.main import app
 from apps.api.src.routers.ops import (
     _manual_output_path,
+    _request_queue,
     _serialize_crawl_runs,
     require_ops_admin_token,
 )
@@ -56,6 +57,27 @@ def test_manual_output_path_uses_crawl_run_prefix():
     assert _manual_output_path("materiel", crawl_run_id) == (
         "/app/apps/crawler/scheduled/materiel_manual_12345678.json"
     )
+
+
+def test_manual_output_path_supports_ldlc():
+    crawl_run_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
+
+    assert _manual_output_path("ldlc", crawl_run_id) == (
+        "/app/apps/crawler/scheduled/ldlc_manual_12345678.json"
+    )
+
+
+def test_request_queue_defaults_to_per_merchant_queue(monkeypatch):
+    monkeypatch.delenv("CRAWLER_MATERIEL_REQUEST_QUEUE", raising=False)
+    monkeypatch.setenv("CRAWLER_REQUEST_QUEUE", "crawler:run_requests")
+
+    assert _request_queue("materiel") == "crawler:run_requests:materiel"
+
+
+def test_request_queue_uses_merchant_override(monkeypatch):
+    monkeypatch.setenv("CRAWLER_LDLC_REQUEST_QUEUE", "crawler:ldlc")
+
+    assert _request_queue("ldlc") == "crawler:ldlc"
 
 
 def test_require_ops_admin_token_rejects_unconfigured_token(monkeypatch):

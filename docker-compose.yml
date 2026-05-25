@@ -118,7 +118,46 @@ services:
       - --log-level
       - ${CRAWLER_LOG_LEVEL:-INFO}
       - --request-queue
-      - ${CRAWLER_REQUEST_QUEUE:-crawler:run_requests}
+      - ${CRAWLER_MATERIEL_REQUEST_QUEUE:-crawler:run_requests:materiel}
+      - --request-poll-seconds
+      - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
+      - --ingest
+    volumes:
+      - ./apps/crawler:/app/apps/crawler
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+
+  crawler-scheduler-ldlc:
+    build:
+      context: .
+      dockerfile: deploy/docker/crawler.Dockerfile
+    env_file: .env
+    profiles:
+      - scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - python
+      - -m
+      - apps.crawler.scripts.scheduler
+      - --merchant
+      - ldlc
+      - --interval-minutes
+      - ${CRAWLER_LDLC_INTERVAL_MINUTES:-60}
+      - --itemcount
+      - ${CRAWLER_LDLC_ITEMCOUNT:-20}
+      - --output-dir
+      - /app/apps/crawler/scheduled
+      - --log-level
+      - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --request-queue
+      - ${CRAWLER_LDLC_REQUEST_QUEUE:-crawler:run_requests:ldlc}
       - --request-poll-seconds
       - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
       - --ingest

@@ -19,6 +19,19 @@ def test_build_run_command_without_ingest():
     assert "/tmp/crawls/materiel_scheduled_latest.json" in command
 
 
+def test_build_run_command_uses_merchant_in_output_name():
+    command = build_run_command(
+        merchant="ldlc",
+        itemcount=20,
+        output_dir=Path("/tmp/crawls"),
+        ingest=False,
+        log_level="INFO",
+    )
+
+    assert command[1:4] == ["-m", "apps.crawler.scripts.run_spider", "ldlc"]
+    assert "/tmp/crawls/ldlc_scheduled_latest.json" in command
+
+
 def test_build_run_command_with_ingest():
     command = build_run_command(
         merchant="materiel",

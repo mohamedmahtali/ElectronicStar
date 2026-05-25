@@ -113,18 +113,21 @@ Runner de crawl avec export JSON, sans ingestion DB par défaut :
 
 ```bash
 make crawl-materiel-demo
+make crawl-ldlc-demo
 ```
 
 Si Docker demande les droits root :
 
 ```bash
 DOCKER_SUDO=1 make crawl-materiel-demo
+DOCKER_SUDO=1 make crawl-ldlc-demo
 ```
 
 Pour crawler puis alimenter Postgres/Elasticsearch via les pipelines Scrapy :
 
 ```bash
 DOCKER_SUDO=1 make crawl-materiel-ingest
+DOCKER_SUDO=1 make crawl-ldlc-ingest
 ```
 
 Les runs avec ingestion enregistrent aussi un statut dans Postgres (`crawl_runs`) :
@@ -148,12 +151,31 @@ DOCKER_SUDO=1 make scheduler-materiel-logs
 DOCKER_SUDO=1 make scheduler-materiel-down
 ```
 
-Le service utilise le profile Docker `scheduler` et `restart: unless-stopped`.
+Service Docker supervisé pour LDLC :
+
+```bash
+DOCKER_SUDO=1 make scheduler-ldlc-up
+DOCKER_SUDO=1 make scheduler-ldlc-logs
+DOCKER_SUDO=1 make scheduler-ldlc-down
+```
+
+Lancer/arrêter les deux schedulers :
+
+```bash
+DOCKER_SUDO=1 make scheduler-up
+DOCKER_SUDO=1 make scheduler-down
+```
+
+Les services utilisent le profile Docker `scheduler` et `restart: unless-stopped`.
 Paramètres dans `.env` :
 
 ```bash
 CRAWLER_MATERIEL_INTERVAL_MINUTES=60
 CRAWLER_MATERIEL_ITEMCOUNT=20
+CRAWLER_MATERIEL_REQUEST_QUEUE=crawler:run_requests:materiel
+CRAWLER_LDLC_INTERVAL_MINUTES=60
+CRAWLER_LDLC_ITEMCOUNT=20
+CRAWLER_LDLC_REQUEST_QUEUE=crawler:run_requests:ldlc
 CRAWLER_LOG_LEVEL=INFO
 OPS_ADMIN_TOKEN=change-me-local-admin-token
 ```
@@ -192,11 +214,14 @@ curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
 ```
 
-Relancer Materiel.net via le scheduler :
+Relancer un marchand via le scheduler :
 
 ```bash
 curl -s -X POST -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/crawl-runs/materiel/run | python3 -m json.tool
+
+curl -s -X POST -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/crawl-runs/ldlc/run | python3 -m json.tool
 ```
 
 Dans l'interface web, le bouton de relance demande cette clé admin la première fois,
@@ -332,12 +357,13 @@ Prêt :
 - agrégation Elasticsearch `price_min` / `price_max` validée
 - historique de prix
 - 2 marchands réels
-- scheduler Materiel.net supervisé avec relance manuelle
+- schedulers Materiel.net et LDLC supervisés avec relance manuelle
+- dashboard ops web
 - routes `/ops` protégées par `OPS_ADMIN_TOKEN`
 
 Reste hors MVP coeur :
 
-- dashboard ops et review manuelle
+- review manuelle
 - CI
 - monitoring
 - robustesse anti-blocage production
