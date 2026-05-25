@@ -667,7 +667,11 @@ p {
   margin-top: 12px;
 }
 
-.copy-link-button {
+.copy-link-button,
+.export-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 32px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -676,14 +680,17 @@ p {
   padding: 0 11px;
   font-size: 12px;
   font-weight: 800;
+  text-decoration: none;
 }
 
-.copy-link-button:hover {
+.copy-link-button:hover,
+.export-link-button:hover {
   border-color: var(--orange);
   color: var(--orange);
 }
 
-.copy-link-button:disabled {
+.copy-link-button:disabled,
+.export-link-button:disabled {
   cursor: default;
   opacity: 0.75;
 }

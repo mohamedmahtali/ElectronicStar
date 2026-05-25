@@ -238,6 +238,18 @@ Historique de prix :
 curl -s "http://localhost:8000/products/<PRODUCT_ID>/price-history" | python3 -m json.tool
 ```
 
+Export CSV des offres :
+
+```bash
+curl -L -o offers.csv "http://localhost:8000/products/<PRODUCT_ID>/offers.csv"
+```
+
+Export CSV de l'historique :
+
+```bash
+curl -L -o price-history.csv "http://localhost:8000/products/<PRODUCT_ID>/price-history.csv"
+```
+
 Remplacer `<PRODUCT_ID>` par un UUID retourné par la recherche.
 
 ## Tests

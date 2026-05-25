@@ -564,6 +564,12 @@ function renderDetail(product, offers) {
             <button class="copy-link-button" type="button" data-copy-product-link="${product.product_id || appState.selectedProductId}">
               Copier le lien
             </button>
+            <a class="export-link-button" href="/products/${encodeURIComponent(product.product_id || appState.selectedProductId)}/offers.csv">
+              Export offres CSV
+            </a>
+            <a class="export-link-button" href="/products/${encodeURIComponent(product.product_id || appState.selectedProductId)}/price-history.csv">
+              Export historique CSV
+            </a>
             <span class="price-change-badge" id="price-change-badge">Variation en cours</span>
           </div>
         </div>

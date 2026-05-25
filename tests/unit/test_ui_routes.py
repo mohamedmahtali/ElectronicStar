@@ -37,3 +37,10 @@ def test_ui_ops_route_has_dashboard_renderer():
     assert "function isOpsRoute()" in js
     assert "async function loadOpsRoute()" in js
     assert "function renderOpsDashboard" in js
+
+
+def test_ui_product_detail_includes_csv_exports():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "/offers.csv" in js
+    assert "/price-history.csv" in js
