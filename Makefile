@@ -1,36 +1,44 @@
-.PHONY: up down build migrate test lint seed es-setup demo-reset-ingest
+DOCKER_COMPOSE = $(if $(DOCKER_SUDO),sudo docker compose,docker compose)
+
+.PHONY: up down build migrate test lint seed es-setup demo-reset-ingest crawl-materiel-demo crawl-materiel-ingest
 
 up:
 	@test -f .env || cp .env.example .env
-	docker compose up -d
+	$(DOCKER_COMPOSE) up -d
 
 down:
-	docker compose down
+	$(DOCKER_COMPOSE) down
 
 build:
-	docker compose build
+	$(DOCKER_COMPOSE) build
 
 migrate:
-	docker compose exec api alembic upgrade head
+	$(DOCKER_COMPOSE) exec api alembic upgrade head
 
 test:
-	docker compose exec api pytest -q
+	$(DOCKER_COMPOSE) exec api pytest -q
 
 lint:
 	python -m py_compile $$(git ls-files '*.py')
 	ruff check .
 
 seed:
-	docker compose exec api python -m apps.api.scripts.seed
+	$(DOCKER_COMPOSE) exec api python -m apps.api.scripts.seed
 
 es-setup:
-	docker compose exec api python -m apps.api.scripts.es_setup
+	$(DOCKER_COMPOSE) exec api python -m apps.api.scripts.es_setup
 
 demo-reset-ingest:
 	./scripts/demo_reset_ingest.sh
 
+crawl-materiel-demo:
+	$(DOCKER_COMPOSE) run --rm crawler python -m apps.crawler.scripts.run_spider materiel --itemcount 20 --output /app/apps/crawler/materiel_crawl_demo.json
+
+crawl-materiel-ingest:
+	$(DOCKER_COMPOSE) run --rm crawler python -m apps.crawler.scripts.run_spider materiel --itemcount 20 --output /app/apps/crawler/materiel_crawl_ingest.json --ingest
+
 logs:
-	docker compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 ps:
-	docker compose ps
+	$(DOCKER_COMPOSE) ps

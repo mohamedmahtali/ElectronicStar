@@ -105,6 +105,34 @@ docker compose run --rm crawler scrapy crawl ldlc \
   -L INFO
 ```
 
+Runner de crawl avec export JSON, sans ingestion DB par défaut :
+
+```bash
+make crawl-materiel-demo
+```
+
+Si Docker demande les droits root :
+
+```bash
+DOCKER_SUDO=1 make crawl-materiel-demo
+```
+
+Pour crawler puis alimenter Postgres/Elasticsearch via les pipelines Scrapy :
+
+```bash
+DOCKER_SUDO=1 make crawl-materiel-ingest
+```
+
+Base scheduler périodique, non activée par défaut :
+
+```bash
+docker compose run --rm crawler python -m apps.crawler.scripts.scheduler \
+  --merchant materiel \
+  --interval-minutes 60 \
+  --itemcount 20 \
+  --ingest
+```
+
 ## API
 
 Interface web de demo :
@@ -246,7 +274,7 @@ Prêt :
 
 Reste hors MVP coeur :
 
-- scheduler de crawl
+- scheduler de crawl production supervisé
 - dashboard ops et review manuelle
 - CI
 - monitoring
