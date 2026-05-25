@@ -88,6 +88,41 @@ services:
       - ./apps/api:/app/apps/api
       - ./libs:/app/libs
 
+  crawler-scheduler-materiel:
+    build:
+      context: .
+      dockerfile: deploy/docker/crawler.Dockerfile
+    env_file: .env
+    profiles:
+      - scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - python
+      - -m
+      - apps.crawler.scripts.scheduler
+      - --merchant
+      - materiel
+      - --interval-minutes
+      - ${CRAWLER_MATERIEL_INTERVAL_MINUTES:-60}
+      - --itemcount
+      - ${CRAWLER_MATERIEL_ITEMCOUNT:-20}
+      - --output-dir
+      - /app/apps/crawler/scheduled
+      - --log-level
+      - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --ingest
+    volumes:
+      - ./apps/crawler:/app/apps/crawler
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+
 volumes:
   pgdata:
   esdata:

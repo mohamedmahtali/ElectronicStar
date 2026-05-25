@@ -136,6 +136,23 @@ docker compose run --rm crawler python -m apps.crawler.scripts.scheduler \
   --ingest
 ```
 
+Service Docker supervisé pour Materiel.net :
+
+```bash
+DOCKER_SUDO=1 make scheduler-materiel-up
+DOCKER_SUDO=1 make scheduler-materiel-logs
+DOCKER_SUDO=1 make scheduler-materiel-down
+```
+
+Le service utilise le profile Docker `scheduler` et `restart: unless-stopped`.
+Paramètres dans `.env` :
+
+```bash
+CRAWLER_MATERIEL_INTERVAL_MINUTES=60
+CRAWLER_MATERIEL_ITEMCOUNT=20
+CRAWLER_LOG_LEVEL=INFO
+```
+
 ## API
 
 Interface web de demo :

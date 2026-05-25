@@ -58,7 +58,7 @@ def run_scheduler(
             ingest=ingest,
             log_level=log_level,
         )
-        print(f"Starting scheduled crawl #{run_number}: {' '.join(command)}")
+        print(f"Starting scheduled crawl #{run_number}: {' '.join(command)}", flush=True)
         subprocess.run(command, check=False)
 
         if iterations is not None and run_number >= iterations:
