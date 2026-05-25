@@ -10,6 +10,7 @@ const activeQuery = document.querySelector("#active-query");
 const state = document.querySelector("#state");
 const resultList = document.querySelector("#result-list");
 const detailPanel = document.querySelector("#detail-panel");
+const crawlStatus = document.querySelector("#crawl-status");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
 
 const appState = {
@@ -71,11 +72,26 @@ function formatDay(value) {
   }).format(new Date(value));
 }
 
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return "en cours";
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  return `${Math.round(seconds / 60)} min`;
+}
+
 function merchantClass(value) {
   const normalized = (value || "").toLowerCase();
   if (normalized.includes("ldlc")) return "merchant-chip--ldlc";
   if (normalized.includes("materiel")) return "merchant-chip--materiel";
   return "merchant-chip--unknown";
+}
+
+function crawlStatusLabel(value) {
+  const labels = {
+    success: "OK",
+    failed: "Erreur",
+    running: "En cours",
+  };
+  return labels[value] || value || "Inconnu";
 }
 
 function availabilityLabel(value) {
@@ -635,6 +651,37 @@ function renderMerchantFilters() {
   });
 }
 
+async function loadCrawlStatus() {
+  if (!crawlStatus) return;
+
+  try {
+    const response = await fetch("/ops/crawl-runs/latest");
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    renderCrawlStatus(data.runs || []);
+  } catch (error) {
+    crawlStatus.innerHTML = `<div class="crawl-status-empty">Indisponible</div>`;
+  }
+}
+
+function renderCrawlStatus(runs) {
+  if (!crawlStatus) return;
+  if (runs.length === 0) {
+    crawlStatus.innerHTML = `<div class="crawl-status-empty">Aucun crawl</div>`;
+    return;
+  }
+
+  crawlStatus.innerHTML = runs.map((run) => `
+    <article class="crawl-run crawl-run--${run.status}">
+      <div>
+        <strong>${run.merchant_name}</strong>
+        <span>${run.items_scraped} items · ${formatShortDate(run.started_at)} · ${formatDuration(run.duration_seconds)}</span>
+      </div>
+      <span class="crawl-status-badge">${crawlStatusLabel(run.status)}</span>
+    </article>
+  `).join("");
+}
+
 window.addEventListener("popstate", () => {
   const productId = currentRouteProductId();
   if (productId) {
@@ -648,6 +695,7 @@ window.addEventListener("popstate", () => {
 });
 
 const initialProductId = currentRouteProductId();
+loadCrawlStatus();
 if (initialProductId) {
   loadProductRoute(initialProductId);
 } else if (isDemoRoute()) {

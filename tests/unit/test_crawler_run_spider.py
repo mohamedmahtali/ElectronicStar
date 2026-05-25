@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from apps.crawler.scripts.run_spider import build_settings, default_output_path
+from apps.crawler.scripts.run_spider import (
+    build_settings,
+    default_output_path,
+    summarize_crawl_stats,
+)
 
 
 def test_default_output_path_uses_spider_name():
@@ -40,3 +44,24 @@ def test_build_settings_keeps_pipelines_when_ingesting():
     assert "apps.crawler.src.pipelines.PostgresPipeline" in settings.get(
         "ITEM_PIPELINES"
     )
+
+
+def test_summarize_crawl_stats_maps_scrapy_stats():
+    summary = summarize_crawl_stats(
+        {
+            "item_scraped_count": 21,
+            "downloader/response_count": 26,
+            "downloader/response_status_count/200": 24,
+            "downloader/response_status_count/429": 1,
+            "downloader/response_status_count/403": 1,
+            "downloader/exception_count": 2,
+        }
+    )
+
+    assert summary == {
+        "items_scraped": 21,
+        "pages_ok": 24,
+        "pages_failed": 4,
+        "captcha_count": 1,
+        "blocked_count": 1,
+    }

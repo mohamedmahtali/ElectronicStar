@@ -279,6 +279,68 @@ button {
   color: var(--muted);
 }
 
+.crawl-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.crawl-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+}
+
+.crawl-run strong,
+.crawl-run span {
+  display: block;
+}
+
+.crawl-run strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.crawl-run span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.crawl-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 5px;
+  background: var(--surface-tint);
+  color: var(--muted);
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.crawl-run--success .crawl-status-badge {
+  background: var(--green-soft);
+  color: #166534;
+}
+
+.crawl-run--failed .crawl-status-badge {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.crawl-status-empty {
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .results-panel,
 .detail-panel {
   min-height: calc(100vh - 112px);

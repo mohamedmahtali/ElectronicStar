@@ -49,10 +49,14 @@ class CrawlRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    items_scraped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     pages_ok: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     pages_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     captcha_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     blocked_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ingest_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    output_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index("ix_crawl_runs_merchant_started", "merchant_id", "started_at"),

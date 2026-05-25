@@ -123,6 +123,9 @@ Pour crawler puis alimenter Postgres/Elasticsearch via les pipelines Scrapy :
 DOCKER_SUDO=1 make crawl-materiel-ingest
 ```
 
+Les runs avec ingestion enregistrent aussi un statut dans Postgres (`crawl_runs`) :
+items scrapés, pages OK/KO, début/fin, durée et erreur éventuelle.
+
 Base scheduler périodique, non activée par défaut :
 
 ```bash
@@ -151,6 +154,12 @@ Page detail produit :
 
 ```bash
 xdg-open http://localhost:8000/ui/product/<PRODUCT_ID>
+```
+
+Derniers statuts de crawl :
+
+```bash
+curl -s http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
 ```
 
 Healthcheck :

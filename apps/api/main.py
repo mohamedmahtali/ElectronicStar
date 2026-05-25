@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from apps.api.src.routers import products, search
+from apps.api.src.routers import ops, products, search
 from apps.api.src.search.es_client import close_es_client
 
 
@@ -24,6 +24,7 @@ app = FastAPI(
 
 app.include_router(search.router)
 app.include_router(products.router)
+app.include_router(ops.router)
 
 WEB_STATIC_DIR = Path(__file__).resolve().parents[1] / "web" / "static"
 if WEB_STATIC_DIR.exists():
