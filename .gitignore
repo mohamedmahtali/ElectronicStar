@@ -13,4 +13,5 @@ log.txt
 .ruff_cache/
 *.sqlite3
 *.pdf
+apps/crawler/*_crawl_*.json
 .DS_Store

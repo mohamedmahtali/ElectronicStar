@@ -4,6 +4,7 @@ import os
 import unicodedata
 
 from elasticsearch import AsyncElasticsearch
+from scrapy.utils.defer import deferred_from_coro
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from apps.api.src.services.es_indexer import ESIndexer
@@ -49,12 +50,16 @@ class PostgresPipeline:
         )
         es_url = os.getenv("ELASTICSEARCH_URL", "http://elasticsearch:9200")
 
-        engine = create_async_engine(db_url, pool_pre_ping=True)
-        self._session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        self._engine = create_async_engine(db_url, pool_pre_ping=True)
+        self._session_factory = async_sessionmaker(self._engine, expire_on_commit=False)
         self._es = AsyncElasticsearch(es_url)
 
-    async def close_spider(self, spider):
+    def close_spider(self, spider):
+        return deferred_from_coro(self._close())
+
+    async def _close(self) -> None:
         await self._es.close()
+        await self._engine.dispose()
 
     async def process_item(self, item: dict, spider):
         if not item:
