@@ -172,7 +172,9 @@ button {
 
 .top-nav {
   display: inline-flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
@@ -406,6 +408,7 @@ button {
 
 .results-panel,
 .detail-panel {
+  min-width: 0;
   min-height: calc(100vh - 112px);
   overflow: hidden;
 }
@@ -698,6 +701,7 @@ p {
 .price-change-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 32px;
   border-radius: var(--radius);
   background: var(--surface-tint);
@@ -917,6 +921,10 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+.ops-cell {
+  min-width: 0;
+}
+
 .ops-detail-grid {
   display: grid;
   gap: 8px;
@@ -1028,7 +1036,37 @@ p {
   }
 }
 
+@media (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: 180px minmax(240px, 1fr) auto;
+    gap: 14px;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .layout {
+    grid-template-columns: 200px minmax(0, 1fr) minmax(300px, 360px);
+    gap: 12px;
+    padding: 18px 12px;
+  }
+
+  .ops-run-card {
+    grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(72px, auto));
+  }
+}
+
 @media (max-width: 960px) {
+  .topbar {
+    grid-template-columns: 170px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .top-nav {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .layout {
     grid-template-columns: 220px minmax(0, 1fr);
   }
@@ -1044,6 +1082,14 @@ p {
     grid-template-columns: 1fr;
     gap: 12px;
     padding: 12px;
+  }
+
+  .search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .search-form button {
+    width: 100%;
   }
 
   .layout {
@@ -1062,6 +1108,18 @@ p {
 
   .detail-panel {
     order: 3;
+    min-height: auto;
+  }
+
+  .panel-head {
+    padding: 16px 14px 12px;
+  }
+
+  .toolbar,
+  .result-list,
+  .state {
+    padding-right: 14px;
+    padding-left: 14px;
   }
 
   .result-card {
@@ -1088,6 +1146,33 @@ p {
     height: 132px;
   }
 
+  .detail-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .detail-actions .crawl-run-button,
+  .copy-link-button,
+  .export-link-button,
+  .price-change-badge {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .offer-top {
+    align-items: flex-start;
+  }
+
+  .offer-money {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .money-value.total {
+    font-size: 16px;
+  }
+
   .history-metrics {
     grid-template-columns: 1fr;
   }
@@ -1095,5 +1180,10 @@ p {
   .ops-summary,
   .ops-run-card {
     grid-template-columns: 1fr;
+  }
+
+  .ops-detail-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 }

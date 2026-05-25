@@ -432,12 +432,7 @@ function renderOpsLocked(title, message) {
       </section>
     </div>
   `;
-  document.querySelector("#ops-token-button")?.addEventListener("click", () => {
-    if (requestOpsAdminToken()) {
-      loadOpsRoute();
-      loadCrawlStatus();
-    }
-  });
+  document.querySelector("#ops-token-button")?.addEventListener("click", changeOpsAdminToken);
 }
 
 function renderOpsDashboard(runs) {
@@ -472,6 +467,7 @@ function renderOpsDashboard(runs) {
           <div class="detail-actions">
             <button class="crawl-run-button" id="ops-run-materiel-crawl" type="button">Relancer Materiel.net</button>
             <button class="copy-link-button" id="ops-refresh-button" type="button">Rafraichir</button>
+            <button class="copy-link-button" id="ops-change-token-button" type="button">Changer la cle</button>
           </div>
         </div>
       </section>
@@ -484,6 +480,7 @@ function renderOpsDashboard(runs) {
     loadOpsRoute();
     loadCrawlStatus();
   });
+  document.querySelector("#ops-change-token-button")?.addEventListener("click", changeOpsAdminToken);
 }
 
 function renderOpsRunCard(run) {
@@ -942,6 +939,19 @@ function requestOpsAdminToken() {
 
 function forgetOpsAdminToken() {
   window.localStorage.removeItem(OPS_ADMIN_TOKEN_STORAGE_KEY);
+}
+
+function changeOpsAdminToken() {
+  forgetOpsAdminToken();
+  const token = requestOpsAdminToken();
+  if (!token) {
+    loadOpsRoute();
+    loadCrawlStatus();
+    return;
+  }
+
+  loadOpsRoute();
+  loadCrawlStatus();
 }
 
 function opsAdminHeaders(token) {

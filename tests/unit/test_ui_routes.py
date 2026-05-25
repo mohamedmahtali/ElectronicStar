@@ -37,6 +37,8 @@ def test_ui_ops_route_has_dashboard_renderer():
     assert "function isOpsRoute()" in js
     assert "async function loadOpsRoute()" in js
     assert "function renderOpsDashboard" in js
+    assert "ops-change-token-button" in js
+    assert "function changeOpsAdminToken()" in js
 
 
 def test_ui_product_detail_includes_csv_exports():
@@ -44,3 +46,12 @@ def test_ui_product_detail_includes_csv_exports():
 
     assert "/offers.csv" in js
     assert "/price-history.csv" in js
+
+
+def test_ui_styles_include_responsive_ops_polish():
+    css = (WEB_STATIC_DIR / "styles.css").read_text()
+
+    assert "@media (max-width: 1180px)" in css
+    assert "@media (max-width: 760px)" in css
+    assert ".ops-detail-row" in css
+    assert ".detail-actions" in css
