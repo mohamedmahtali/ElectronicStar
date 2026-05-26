@@ -71,3 +71,10 @@ ITEM_PIPELINES = {
 
 # Logs
 LOG_LEVEL = "INFO"
+
+# Extensions
+EXTENSIONS = {
+    "scrapy.extensions.corestats.CoreStats": 0,
+    "scrapy.extensions.telnet.TelnetConsole": None,
+    "apps.crawler.src.extensions.PrometheusPushExtension": 500,
+}

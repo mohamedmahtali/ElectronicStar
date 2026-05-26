@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from apps.api.src.routers import ops, products, search
 from apps.api.src.search.es_client import close_es_client
@@ -21,6 +22,11 @@ app = FastAPI(
     description="API de comparaison de prix — catalogue canonique et offres marchands",
     lifespan=lifespan,
 )
+
+Instrumentator(
+    excluded_handlers=["/metrics", "/healthz", "/livez"],
+    should_group_status_codes=True,
+).instrument(app).expose(app, include_in_schema=False)
 
 app.include_router(search.router)
 app.include_router(products.router)

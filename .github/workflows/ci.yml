@@ -6,8 +6,52 @@ on:
 
 jobs:
   tests:
-    name: Non destructive tests
+    name: Lint + tests
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: electronic_star
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: changeme
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d electronic_star"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -sf http://localhost:9200/_cluster/health"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://app:changeme@localhost:5432/electronic_star
+      ELASTICSEARCH_URL: http://localhost:9200
+      REDIS_URL: redis://localhost:6379
 
     steps:
       - name: Checkout
@@ -23,5 +67,17 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements/dev.txt
 
-      - name: Run unit tests
+      - name: Lint (syntax check)
+        run: python -m py_compile $(git ls-files '*.py')
+
+      - name: Unit tests
         run: python -m pytest -q -m "not integration"
+
+      - name: Apply migrations
+        run: python -m alembic upgrade head
+
+      - name: Setup Elasticsearch index
+        run: python -m apps.api.scripts.es_setup
+
+      - name: Integration tests
+        run: python -m pytest -q -m integration

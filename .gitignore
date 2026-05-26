@@ -16,4 +16,5 @@ log.txt
 apps/crawler/*_crawl_*.json
 apps/crawler/scheduled/*.json
 apps/crawler/raw_documents/
+electronicstar-*.csv
 .DS_Store
