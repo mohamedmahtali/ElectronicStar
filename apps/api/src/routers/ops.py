@@ -12,7 +12,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.src.db.models import CrawlRun, Merchant
+from apps.api.src.db.models import CrawlRun, Merchant, RawDocument
 from apps.api.src.db.session import get_db
 
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
@@ -70,6 +70,26 @@ class CrawlRunsResponse(BaseModel):
     runs: list[CrawlRunOut]
 
 
+class RawDocumentOut(BaseModel):
+    raw_document_id: str
+    crawl_run_id: str
+    merchant_id: str
+    merchant_slug: str
+    merchant_name: str
+    url: str
+    doc_type: str
+    http_status: int
+    payload_sha256: str
+    payload_path: str | None
+    content_length: int
+    stored_at: str
+
+
+class RawDocumentsResponse(BaseModel):
+    crawl_run_id: str
+    documents: list[RawDocumentOut]
+
+
 class CrawlRunTriggerResponse(BaseModel):
     crawl_run_id: str
     merchant_slug: str
@@ -96,6 +116,22 @@ async def list_latest_crawl_runs(db: AsyncSession = Depends(get_db)):
 
     latest_rows = [latest_by_merchant[slug] for slug in sorted(latest_by_merchant)]
     return CrawlRunsResponse(runs=_serialize_crawl_runs(latest_rows))
+
+
+@router.get(
+    "/crawl-runs/{crawl_run_id}/documents",
+    response_model=RawDocumentsResponse,
+)
+async def list_crawl_run_documents(
+    crawl_run_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await _load_raw_documents(db, crawl_run_id=crawl_run_id, limit=limit)
+    return RawDocumentsResponse(
+        crawl_run_id=str(crawl_run_id),
+        documents=_serialize_raw_documents(rows),
+    )
 
 
 @router.post(
@@ -158,6 +194,22 @@ async def _load_crawl_runs(
         select(CrawlRun, Merchant)
         .join(Merchant, Merchant.id == CrawlRun.merchant_id)
         .order_by(CrawlRun.started_at.desc())
+        .limit(limit)
+    )
+    return list(result.all())
+
+
+async def _load_raw_documents(
+    db: AsyncSession,
+    *,
+    crawl_run_id: uuid.UUID,
+    limit: int,
+) -> list[tuple[RawDocument, Merchant]]:
+    result = await db.execute(
+        select(RawDocument, Merchant)
+        .join(Merchant, Merchant.id == RawDocument.merchant_id)
+        .where(RawDocument.crawl_run_id == crawl_run_id)
+        .order_by(RawDocument.stored_at.desc(), RawDocument.url)
         .limit(limit)
     )
     return list(result.all())
@@ -241,6 +293,28 @@ def _serialize_crawl_runs(rows: list[tuple[CrawlRun, Merchant]]) -> list[CrawlRu
             error_message=run.error_message,
         )
         for run, merchant in rows
+    ]
+
+
+def _serialize_raw_documents(
+    rows: list[tuple[RawDocument, Merchant]]
+) -> list[RawDocumentOut]:
+    return [
+        RawDocumentOut(
+            raw_document_id=str(document.id),
+            crawl_run_id=str(document.crawl_run_id),
+            merchant_id=str(merchant.id),
+            merchant_slug=merchant.slug,
+            merchant_name=merchant.display_name,
+            url=document.url,
+            doc_type=document.doc_type,
+            http_status=document.http_status,
+            payload_sha256=document.payload_sha256,
+            payload_path=document.payload_path,
+            content_length=document.content_length,
+            stored_at=document.stored_at.isoformat(),
+        )
+        for document, merchant in rows
     ]
 
 

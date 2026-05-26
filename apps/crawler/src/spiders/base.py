@@ -1,6 +1,9 @@
 import scrapy
 from scrapy import Spider
 
+from apps.crawler.src.raw_documents import raw_document_from_response
+from libs.crawling.schemas import RawItem
+
 
 class BaseProductSpider(Spider):
     """Spider de base pour les marchands statiques.
@@ -28,6 +31,12 @@ class BaseProductSpider(Spider):
 
     def parse_product(self, response) -> dict:
         raise NotImplementedError
+
+    def dump_item(self, item: RawItem, response) -> dict:
+        payload = item.model_dump()
+        if self.settings.getbool("RAW_DOCUMENTS_ENABLED", False):
+            payload["_raw_document"] = raw_document_from_response(response)
+        return payload
 
     def extract_product_links(self, response) -> list[str]:
         return []

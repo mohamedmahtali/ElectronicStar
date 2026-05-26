@@ -177,8 +177,15 @@ CRAWLER_LDLC_INTERVAL_MINUTES=60
 CRAWLER_LDLC_ITEMCOUNT=20
 CRAWLER_LDLC_REQUEST_QUEUE=crawler:run_requests:ldlc
 CRAWLER_LOG_LEVEL=INFO
+RAW_DOCUMENTS_DIR=/app/apps/crawler/raw_documents
 OPS_ADMIN_TOKEN=change-me-local-admin-token
 ```
+
+Quand un crawl avec ingestion est rattaché à un `crawl_run`, les pages produit
+brutes sont sauvegardées sous `RAW_DOCUMENTS_DIR` et référencées dans
+Postgres (`raw_documents`) avec URL, statut HTTP, hash SHA-256, taille et chemin
+du payload. Cela permet d'auditer un prix affiché en remontant à la réponse
+source capturée pendant le crawl.
 
 ## API
 
@@ -212,6 +219,13 @@ Derniers statuts de crawl :
 export OPS_ADMIN_TOKEN=change-me-local-admin-token
 curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/crawl-runs/latest | python3 -m json.tool
+```
+
+Documents bruts d'un run :
+
+```bash
+curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/crawl-runs/<CRAWL_RUN_ID>/documents | python3 -m json.tool
 ```
 
 Relancer un marchand via le scheduler :
@@ -373,6 +387,7 @@ Prêt :
 - 2 marchands réels
 - schedulers Materiel.net et LDLC supervisés avec relance manuelle
 - dashboard ops web
+- documents bruts de crawl rattachés aux runs pour audit des prix
 - routes `/ops` protégées par `OPS_ADMIN_TOKEN`
 
 Reste hors MVP coeur :

@@ -4,7 +4,6 @@ import uuid
 from datetime import UTC, datetime
 
 from elasticsearch import AsyncElasticsearch
-from sqlalchemy import select
 
 from apps.api.src.db.models import Offer, Product
 from apps.api.src.search.es_mappings import PRODUCTS_INDEX_WRITE

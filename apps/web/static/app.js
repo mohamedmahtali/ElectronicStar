@@ -99,6 +99,13 @@ function formatDuration(seconds) {
   return `${Math.round(seconds / 60)} min`;
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} o`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} Ko`;
+  return `${(value / 1024 / 1024).toFixed(1)} Mo`;
+}
+
 function merchantClass(value) {
   const normalized = (value || "").toLowerCase();
   if (normalized.includes("ldlc")) return "merchant-chip--ldlc";
@@ -495,6 +502,9 @@ function renderOpsDashboard(runs) {
     loadCrawlStatus();
   });
   document.querySelector("#ops-change-token-button")?.addEventListener("click", changeOpsAdminToken);
+  if (latestRun) {
+    renderOpsRawDocuments(latestRun.crawl_run_id);
+  }
 }
 
 function renderOpsRunCard(run) {
@@ -535,6 +545,15 @@ function renderOpsRunDetail(run) {
         ${run.error_message ? renderOpsDetailRow("Erreur", run.error_message) : ""}
       </div>
     </section>
+    <section class="price-history" id="ops-raw-documents-panel">
+      <div class="offers-head">
+        <h3>Documents bruts</h3>
+        <span id="ops-raw-documents-count">Chargement</span>
+      </div>
+      <div class="raw-document-list" id="ops-raw-documents-body">
+        <div class="skeleton skeleton--compact"></div>
+      </div>
+    </section>
   `;
 }
 
@@ -544,6 +563,44 @@ function renderOpsDetailRow(label, value) {
       <span>${label}</span>
       <strong>${value}</strong>
     </div>
+  `;
+}
+
+async function renderOpsRawDocuments(crawlRunId) {
+  const count = document.querySelector("#ops-raw-documents-count");
+  const body = document.querySelector("#ops-raw-documents-body");
+  const token = savedOpsAdminToken();
+  if (!count || !body || !crawlRunId || !token) return;
+
+  try {
+    const response = await fetch(`/ops/crawl-runs/${encodeURIComponent(crawlRunId)}/documents?limit=8`, {
+      headers: opsAdminHeaders(token),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    const documents = data.documents || [];
+    count.textContent = `${documents.length} ${documents.length > 1 ? "docs" : "doc"}`;
+    body.innerHTML = documents.length
+      ? documents.map(renderRawDocumentRow).join("")
+      : `<div class="history-empty">Aucun document brut rattache a ce run.</div>`;
+  } catch (error) {
+    count.textContent = "Erreur";
+    body.innerHTML = `<div class="history-empty">Documents bruts indisponibles.</div>`;
+  }
+}
+
+function renderRawDocumentRow(document) {
+  return `
+    <article class="raw-document-row">
+      <div>
+        <strong>${document.http_status} · ${document.doc_type.toUpperCase()}</strong>
+        <span>${document.url}</span>
+      </div>
+      <div class="raw-document-meta">
+        <span>${formatBytes(document.content_length)}</span>
+        <span>${document.payload_sha256.slice(0, 10)}</span>
+      </div>
+    </article>
   `;
 }
 

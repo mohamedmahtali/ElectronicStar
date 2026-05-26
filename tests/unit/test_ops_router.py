@@ -10,6 +10,7 @@ from apps.api.src.routers.ops import (
     _manual_output_path,
     _request_queue,
     _serialize_crawl_runs,
+    _serialize_raw_documents,
     require_ops_admin_token,
 )
 
@@ -57,6 +58,41 @@ def test_manual_output_path_uses_crawl_run_prefix():
     assert _manual_output_path("materiel", crawl_run_id) == (
         "/app/apps/crawler/scheduled/materiel_manual_12345678.json"
     )
+
+
+def test_serialize_raw_documents_includes_payload_metadata():
+    crawl_run_id = uuid.uuid4()
+    merchant_id = uuid.uuid4()
+    stored_at = datetime(2026, 5, 26, 10, 15, tzinfo=UTC)
+    document = SimpleNamespace(
+        id=uuid.uuid4(),
+        crawl_run_id=crawl_run_id,
+        merchant_id=merchant_id,
+        url="https://www.ldlc.com/fiche/PB00728588.html",
+        doc_type="html",
+        http_status=200,
+        payload_sha256="a" * 64,
+        payload_path="/app/apps/crawler/raw_documents/run/a.html",
+        content_length=12345,
+        stored_at=stored_at,
+    )
+    merchant = SimpleNamespace(
+        id=merchant_id,
+        slug="ldlc",
+        display_name="LDLC",
+    )
+
+    serialized = _serialize_raw_documents([(document, merchant)])
+
+    assert len(serialized) == 1
+    item = serialized[0]
+    assert item.raw_document_id == str(document.id)
+    assert item.crawl_run_id == str(crawl_run_id)
+    assert item.merchant_slug == "ldlc"
+    assert item.url == document.url
+    assert item.payload_path == document.payload_path
+    assert item.content_length == 12345
+    assert item.stored_at == stored_at.isoformat()
 
 
 def test_manual_output_path_supports_ldlc():

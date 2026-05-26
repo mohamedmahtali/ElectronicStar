@@ -15,4 +15,5 @@ log.txt
 *.pdf
 apps/crawler/*_crawl_*.json
 apps/crawler/scheduled/*.json
+apps/crawler/raw_documents/
 .DS_Store

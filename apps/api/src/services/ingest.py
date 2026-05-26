@@ -8,7 +8,7 @@ from apps.api.src.services.repository import ProductRepository
 from apps.api.src.services.es_indexer import ESIndexer
 from libs.crawling.fingerprint import compute_fingerprint
 from libs.crawling.schemas import ParsedOffer, RawItem
-from libs.matcher.engine import MatchEngine, MatchStrategy
+from libs.matcher.engine import MatchEngine
 from libs.normalizer import normalize_brand, normalize_category, normalize_title
 
 logger = logging.getLogger(__name__)

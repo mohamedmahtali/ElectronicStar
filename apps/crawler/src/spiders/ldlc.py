@@ -146,7 +146,7 @@ class LdlcSpider(BaseProductSpider):
     def parse_product(self, response):
         item = self._from_json_ld(response) or self._from_css(response)
         if item:
-            yield item.model_dump()
+            yield self.dump_item(item, response)
 
     def errback_log(self, failure):
         request = failure.request

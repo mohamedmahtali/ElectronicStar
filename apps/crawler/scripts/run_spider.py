@@ -30,6 +30,7 @@ def build_settings(
     itemcount: int | None,
     ingest: bool,
     log_level: str,
+    crawl_run_id: uuid.UUID | None = None,
 ) -> Settings:
     os.environ.setdefault("SCRAPY_SETTINGS_MODULE", "apps.crawler.settings")
     settings = get_project_settings()
@@ -45,6 +46,17 @@ def build_settings(
         priority="cmdline",
     )
     settings.set("LOG_LEVEL", log_level, priority="cmdline")
+    settings.set("CRAWL_RUN_ID", str(crawl_run_id or ""), priority="cmdline")
+    settings.set(
+        "RAW_DOCUMENTS_ENABLED",
+        bool(ingest and crawl_run_id is not None),
+        priority="cmdline",
+    )
+    settings.set(
+        "RAW_DOCUMENTS_DIR",
+        os.getenv("RAW_DOCUMENTS_DIR", "/app/apps/crawler/raw_documents"),
+        priority="cmdline",
+    )
 
     if itemcount is not None:
         settings.set("CLOSESPIDER_ITEMCOUNT", itemcount, priority="cmdline")
@@ -101,6 +113,7 @@ def run_spider(
         itemcount=itemcount,
         ingest=ingest,
         log_level=log_level,
+        crawl_run_id=run_id,
     )
     process = CrawlerProcess(settings)
     crawler = process.create_crawler(spider)

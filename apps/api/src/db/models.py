@@ -74,10 +74,19 @@ class RawDocument(Base):
     http_status: Mapped[int] = mapped_column(Integer, nullable=False)
     headers: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     payload_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_length: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint("merchant_id", "url", "payload_sha256"),
+        UniqueConstraint(
+            "crawl_run_id",
+            "merchant_id",
+            "url",
+            "payload_sha256",
+            name="uq_raw_documents_run_merchant_url_payload",
+        ),
+        Index("ix_raw_documents_crawl_run_stored", "crawl_run_id", "stored_at"),
     )
 
 

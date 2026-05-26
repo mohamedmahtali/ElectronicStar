@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 def _utc_now() -> datetime:

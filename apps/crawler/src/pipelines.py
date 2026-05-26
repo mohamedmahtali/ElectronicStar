@@ -1,12 +1,17 @@
 """Pipelines Scrapy : normalisation → ingestion DB + ES."""
 import logging
 import os
+import uuid
 import unicodedata
+from pathlib import Path
 
 from elasticsearch import AsyncElasticsearch
 from scrapy.utils.defer import deferred_from_coro
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from apps.api.src.db.models import Merchant, RawDocument
 from apps.api.src.services.es_indexer import ESIndexer
 from apps.api.src.services.ingest import IngestService
 from libs.crawling.fingerprint import compute_fingerprint
@@ -53,6 +58,17 @@ class PostgresPipeline:
         self._engine = create_async_engine(db_url, pool_pre_ping=True)
         self._session_factory = async_sessionmaker(self._engine, expire_on_commit=False)
         self._es = AsyncElasticsearch(es_url)
+        self._crawl_run_id = _uuid_or_none(spider.settings.get("CRAWL_RUN_ID"))
+        self._raw_documents_enabled = bool(
+            spider.settings.getbool("RAW_DOCUMENTS_ENABLED", False)
+            and self._crawl_run_id is not None
+        )
+        self._raw_documents_dir = Path(
+            os.getenv(
+                "RAW_DOCUMENTS_DIR",
+                spider.settings.get("RAW_DOCUMENTS_DIR", "/app/apps/crawler/raw_documents"),
+            )
+        )
 
     def close_spider(self, spider):
         return deferred_from_coro(self._close())
@@ -64,8 +80,63 @@ class PostgresPipeline:
     async def process_item(self, item: dict, spider):
         if not item:
             return item
+        raw_document = item.pop("_raw_document", None)
+        await self._persist_raw_document(raw_document, item)
         await self._ingest(item)
         return item
+
+    async def _persist_raw_document(self, raw_document: dict | None, item: dict) -> None:
+        if not self._raw_documents_enabled or not raw_document:
+            return
+
+        body = raw_document.pop("body", b"")
+        payload_path = self._write_raw_document_body(raw_document, body)
+
+        async with self._session_factory() as session:
+            merchant_id = await session.scalar(
+                select(Merchant.id).where(Merchant.slug == item["merchant_slug"])
+            )
+            if merchant_id is None:
+                logger.warning("Raw document ignored for unknown merchant=%s", item["merchant_slug"])
+                return
+
+            stmt = pg_insert(RawDocument).values(
+                id=uuid.uuid4(),
+                crawl_run_id=self._crawl_run_id,
+                merchant_id=merchant_id,
+                url=raw_document["url"],
+                doc_type=raw_document["doc_type"],
+                http_status=raw_document["http_status"],
+                headers=raw_document["headers"],
+                payload_sha256=raw_document["payload_sha256"],
+                payload_path=payload_path,
+                content_length=raw_document["content_length"],
+            ).on_conflict_do_update(
+                index_elements=[
+                    "crawl_run_id",
+                    "merchant_id",
+                    "url",
+                    "payload_sha256",
+                ],
+                set_={
+                    "http_status": raw_document["http_status"],
+                    "headers": raw_document["headers"],
+                    "payload_path": payload_path,
+                    "content_length": raw_document["content_length"],
+                },
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+    def _write_raw_document_body(self, raw_document: dict, body: bytes) -> str:
+        run_dir = self._raw_documents_dir / str(self._crawl_run_id)
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        extension = _document_extension(raw_document.get("doc_type"))
+        path = run_dir / f"{raw_document['payload_sha256']}.{extension}"
+        if body and not path.exists():
+            path.write_bytes(body)
+        return str(path)
 
     async def _ingest(self, item: dict) -> None:
         raw = RawItem(**{k: v for k, v in item.items() if k in RawItem.model_fields})
@@ -78,3 +149,18 @@ class PostgresPipeline:
                 logger.error("Ingest failed for sku=%s: %s", item.get("merchant_sku"), exc)
                 await session.rollback()
                 raise
+
+
+def _document_extension(doc_type: str | None) -> str:
+    if doc_type == "json":
+        return "json"
+    return "html"
+
+
+def _uuid_or_none(value) -> uuid.UUID | None:
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except ValueError:
+        return None

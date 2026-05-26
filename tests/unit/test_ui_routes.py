@@ -54,6 +54,13 @@ def test_ui_product_detail_includes_csv_exports():
     assert "/price-history.csv" in js
 
 
+def test_ui_ops_route_links_raw_documents_endpoint():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "/documents?limit=8" in js
+    assert "Documents bruts" in js
+
+
 def test_ui_styles_include_responsive_ops_polish():
     css = (WEB_STATIC_DIR / "styles.css").read_text()
 

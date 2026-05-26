@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import UUID
 
 from apps.crawler.scripts.run_spider import (
     build_settings,
@@ -31,19 +32,24 @@ def test_build_settings_exports_json_and_disables_pipelines_by_default():
     assert settings.getint("CLOSESPIDER_ITEMCOUNT") == 20
     assert settings.get("ITEM_PIPELINES") == {}
     assert settings.get("LOG_LEVEL") == "WARNING"
+    assert settings.getbool("RAW_DOCUMENTS_ENABLED") is False
 
 
 def test_build_settings_keeps_pipelines_when_ingesting():
+    crawl_run_id = UUID("12345678-1234-5678-1234-567812345678")
     settings = build_settings(
         output=Path("/tmp/materiel.json"),
         itemcount=None,
         ingest=True,
         log_level="INFO",
+        crawl_run_id=crawl_run_id,
     )
 
     assert "apps.crawler.src.pipelines.PostgresPipeline" in settings.get(
         "ITEM_PIPELINES"
     )
+    assert settings.get("CRAWL_RUN_ID") == str(crawl_run_id)
+    assert settings.getbool("RAW_DOCUMENTS_ENABLED") is True
 
 
 def test_summarize_crawl_stats_maps_scrapy_stats():
