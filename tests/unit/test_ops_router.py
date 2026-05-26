@@ -155,6 +155,10 @@ def test_ops_routes_include_admin_dependency():
     ]
 
     assert ops_routes
+    assert any(
+        getattr(route, "path", "") == "/ops/offers/{offer_id}/source-document"
+        for route in ops_routes
+    )
     for route in ops_routes:
         dependencies = [dependency.call for dependency in route.dependant.dependencies]
         assert require_ops_admin_token in dependencies

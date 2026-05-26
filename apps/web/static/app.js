@@ -106,6 +106,16 @@ function formatBytes(bytes) {
   return `${(value / 1024 / 1024).toFixed(1)} Mo`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
 function merchantClass(value) {
   const normalized = (value || "").toLowerCase();
   if (normalized.includes("ldlc")) return "merchant-chip--ldlc";
@@ -594,7 +604,7 @@ function renderRawDocumentRow(document) {
     <article class="raw-document-row">
       <div>
         <strong>${document.http_status} · ${document.doc_type.toUpperCase()}</strong>
-        <span>${document.url}</span>
+        <span>${escapeHtml(document.url)}</span>
       </div>
       <div class="raw-document-meta">
         <span>${formatBytes(document.content_length)}</span>
@@ -665,6 +675,7 @@ function renderDetail(product, offers) {
   `;
 
   bindDetailActions(product.product_id || appState.selectedProductId);
+  bindOfferSourceActions();
   renderPriceHistory(product.product_id || appState.selectedProductId);
 }
 
@@ -711,6 +722,77 @@ async function copyText(text) {
   textarea.remove();
 }
 
+function bindOfferSourceActions() {
+  detailPanel.querySelectorAll("[data-offer-source-id]").forEach((button) => {
+    button.addEventListener("click", showOfferSourceDocument);
+  });
+}
+
+async function showOfferSourceDocument(event) {
+  const button = event.currentTarget;
+  const offerId = button.dataset.offerSourceId;
+  const token = requestOpsAdminToken();
+  if (!token || !offerId) return;
+
+  const originalLabel = button.textContent.trim();
+  button.disabled = true;
+  button.textContent = "Source...";
+
+  try {
+    const response = await fetch(`/ops/offers/${encodeURIComponent(offerId)}/source-document`, {
+      headers: opsAdminHeaders(token),
+    });
+    if (response.status === 401 || response.status === 403) {
+      forgetOpsAdminToken();
+      throw new Error("Token admin invalide");
+    }
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    renderOfferSourceMessage(button, data.document);
+  } catch (error) {
+    renderOfferSourceMessage(button, null, true);
+  } finally {
+    button.textContent = originalLabel;
+    button.disabled = false;
+  }
+}
+
+function renderOfferSourceMessage(button, sourceDocument, hasError = false) {
+  const card = button.closest(".offer-card");
+  if (!card) return;
+
+  let panel = card.querySelector(".source-document-panel");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.className = "source-document-panel";
+    card.appendChild(panel);
+  }
+
+  panel.classList.toggle("is-error", hasError);
+  if (hasError) {
+    panel.innerHTML = `
+      <strong>Source indisponible</strong>
+      <span>Verifie la cle admin puis recharge la source.</span>
+    `;
+    return;
+  }
+
+  if (!sourceDocument) {
+    panel.innerHTML = `
+      <strong>Aucune source brute</strong>
+      <span>Aucun document crawl ne correspond a cette offre.</span>
+    `;
+    return;
+  }
+
+  panel.innerHTML = `
+    <strong>${sourceDocument.http_status} · ${escapeHtml(sourceDocument.doc_type.toUpperCase())}</strong>
+    <span>${escapeHtml(sourceDocument.url)}</span>
+    <span>${formatBytes(sourceDocument.content_length)} · ${escapeHtml(sourceDocument.payload_sha256.slice(0, 10))}</span>
+    ${sourceDocument.payload_path ? `<span>${escapeHtml(sourceDocument.payload_path)}</span>` : ""}
+  `;
+}
+
 function renderOffer(offer, isBest) {
   const total = offer.price_amount + offer.shipping_amount;
   const merchantName = offer.merchant_name || offer.merchant_slug || offer.merchant_id.slice(0, 8);
@@ -736,9 +818,16 @@ function renderOffer(offer, isBest) {
           <div class="money-value total">${formatPrice(total)}</div>
         </div>
       </div>
-      <a class="offer-button" href="${offer.product_url}" target="_blank" rel="noreferrer">
-        Voir l'offre
-      </a>
+      <div class="offer-actions">
+        <a class="offer-button" href="${offer.product_url}" target="_blank" rel="noreferrer">
+          Voir l'offre
+        </a>
+        ${offer.offer_id ? `
+          <button class="copy-link-button source-document-button" type="button" data-offer-source-id="${offer.offer_id}">
+            Source crawl
+          </button>
+        ` : ""}
+      </div>
     </article>
   `;
 }

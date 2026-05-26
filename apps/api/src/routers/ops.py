@@ -12,7 +12,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.src.db.models import CrawlRun, Merchant, RawDocument
+from apps.api.src.db.models import CrawlRun, Merchant, Offer, RawDocument
 from apps.api.src.db.session import get_db
 
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
@@ -90,6 +90,11 @@ class RawDocumentsResponse(BaseModel):
     documents: list[RawDocumentOut]
 
 
+class OfferSourceDocumentResponse(BaseModel):
+    offer_id: str
+    document: RawDocumentOut | None
+
+
 class CrawlRunTriggerResponse(BaseModel):
     crawl_run_id: str
     merchant_slug: str
@@ -131,6 +136,26 @@ async def list_crawl_run_documents(
     return RawDocumentsResponse(
         crawl_run_id=str(crawl_run_id),
         documents=_serialize_raw_documents(rows),
+    )
+
+
+@router.get(
+    "/offers/{offer_id}/source-document",
+    response_model=OfferSourceDocumentResponse,
+)
+async def get_offer_source_document(
+    offer_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    offer = await db.get(Offer, offer_id)
+    if offer is None:
+        raise HTTPException(status_code=404, detail="Offre introuvable")
+
+    row = await _load_offer_source_document(db, offer)
+    documents = _serialize_raw_documents([row]) if row else []
+    return OfferSourceDocumentResponse(
+        offer_id=str(offer_id),
+        document=documents[0] if documents else None,
     )
 
 
@@ -213,6 +238,23 @@ async def _load_raw_documents(
         .limit(limit)
     )
     return list(result.all())
+
+
+async def _load_offer_source_document(
+    db: AsyncSession,
+    offer: Offer,
+) -> tuple[RawDocument, Merchant] | None:
+    result = await db.execute(
+        select(RawDocument, Merchant)
+        .join(Merchant, Merchant.id == RawDocument.merchant_id)
+        .where(
+            RawDocument.merchant_id == offer.merchant_id,
+            RawDocument.url == offer.product_url,
+        )
+        .order_by(RawDocument.stored_at.desc(), RawDocument.id.desc())
+        .limit(1)
+    )
+    return result.first()
 
 
 async def _load_merchant(db: AsyncSession, merchant_slug: str) -> Merchant:

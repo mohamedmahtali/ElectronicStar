@@ -61,6 +61,14 @@ def test_ui_ops_route_links_raw_documents_endpoint():
     assert "Documents bruts" in js
 
 
+def test_ui_offer_cards_link_source_documents():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "data-offer-source-id" in js
+    assert "/source-document" in js
+    assert "Source crawl" in js
+
+
 def test_ui_styles_include_responsive_ops_polish():
     css = (WEB_STATIC_DIR / "styles.css").read_text()
 

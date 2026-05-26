@@ -15,6 +15,7 @@ router = APIRouter(prefix="/products", tags=["products"])
 
 
 class OfferOut(BaseModel):
+    offer_id: str
     merchant_id: str
     merchant_slug: str
     merchant_name: str
@@ -195,6 +196,7 @@ async def _load_price_history(
 def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
     return [
         OfferOut(
+            offer_id=str(offer.id),
             merchant_id=str(offer.merchant_id),
             merchant_slug=merchant.slug,
             merchant_name=merchant.display_name,
@@ -236,6 +238,7 @@ def _offers_csv(product: Product, offers: list[OfferOut]) -> str:
             "canonical_key",
             "title",
             "brand",
+            "offer_id",
             "merchant_slug",
             "merchant_name",
             "seller_name",
@@ -253,6 +256,7 @@ def _offers_csv(product: Product, offers: list[OfferOut]) -> str:
                 product.canonical_key,
                 product.title_display,
                 product.brand_norm or "",
+                offer.offer_id,
                 offer.merchant_slug,
                 offer.merchant_name,
                 offer.seller_name or "",

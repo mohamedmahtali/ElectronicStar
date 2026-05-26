@@ -3,7 +3,39 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from apps.api.src.routers.products import _offers_csv, _price_history_csv, _serialize_price_history
+from apps.api.src.routers.products import (
+    _offers_csv,
+    _price_history_csv,
+    _serialize_offers,
+    _serialize_price_history,
+)
+
+
+def test_serialize_offers_includes_offer_id():
+    offer_id = uuid.uuid4()
+    merchant_id = uuid.uuid4()
+    offer = SimpleNamespace(
+        id=offer_id,
+        merchant_id=merchant_id,
+        seller_name=None,
+        price_amount=Decimal("499.95"),
+        shipping_amount=Decimal("0.00"),
+        availability="in_stock",
+        condition="new",
+        product_url="https://www.ldlc.com/fiche/PB00728588.html",
+        last_seen_at=datetime(2026, 5, 25, 18, 0, tzinfo=UTC),
+    )
+    merchant = SimpleNamespace(
+        id=merchant_id,
+        slug="ldlc",
+        display_name="LDLC",
+    )
+
+    serialized = _serialize_offers([(offer, merchant)])
+
+    assert len(serialized) == 1
+    assert serialized[0].offer_id == str(offer_id)
+    assert serialized[0].merchant_slug == "ldlc"
 
 
 def test_serialize_price_history_includes_merchant_and_total():
@@ -37,6 +69,7 @@ def test_serialize_price_history_includes_merchant_and_total():
 
 def test_offers_csv_includes_product_and_offer_rows():
     product_id = uuid.uuid4()
+    offer_id = uuid.uuid4()
     merchant_id = uuid.uuid4()
     product = SimpleNamespace(
         id=product_id,
@@ -45,6 +78,7 @@ def test_offers_csv_includes_product_and_offer_rows():
         brand_norm="lenovo",
     )
     offer = SimpleNamespace(
+        offer_id=str(offer_id),
         merchant_id=str(merchant_id),
         merchant_slug="ldlc",
         merchant_name="LDLC",
@@ -59,8 +93,9 @@ def test_offers_csv_includes_product_and_offer_rows():
 
     content = _offers_csv(product, [offer])
 
-    assert "product_id,canonical_key,title,brand,merchant_slug" in content
+    assert "product_id,canonical_key,title,brand,offer_id,merchant_slug" in content
     assert str(product_id) in content
+    assert str(offer_id) in content
     assert "Lenovo V15 G5 IRL" in content
     assert "499.95,0.00,499.95" in content
 

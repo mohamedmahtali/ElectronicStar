@@ -228,6 +228,13 @@ curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/crawl-runs/<CRAWL_RUN_ID>/documents | python3 -m json.tool
 ```
 
+Dernier document brut rattache a une offre :
+
+```bash
+curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/offers/<OFFER_ID>/source-document | python3 -m json.tool
+```
+
 Relancer un marchand via le scheduler :
 
 ```bash
@@ -264,6 +271,9 @@ Offres d'un produit :
 ```bash
 curl -s "http://localhost:8000/products/<PRODUCT_ID>/offers" | python3 -m json.tool
 ```
+
+Chaque offre contient un `offer_id`, utilisé par l'interface pour auditer la
+source crawl via les routes `/ops`.
 
 Detail complet d'un produit :
 
