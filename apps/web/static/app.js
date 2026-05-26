@@ -14,6 +14,8 @@ const crawlStatus = document.querySelector("#crawl-status");
 const crawlRunButtons = document.querySelectorAll("[data-crawl-merchant]");
 const merchantFilters = document.querySelectorAll(".merchant-filter");
 const topNavLinks = document.querySelectorAll(".top-nav a");
+const categoryList = document.querySelector("#category-list");
+const layout = document.querySelector(".layout");
 const OPS_ADMIN_TOKEN_STORAGE_KEY = "electronicstar.opsAdminToken";
 const CRAWL_MERCHANTS = [
   { slug: "materiel", name: "Materiel.net" },
@@ -24,6 +26,7 @@ const appState = {
   selectedProductId: null,
   products: [],
   merchant: null,
+  category: null,
 };
 
 function productDetailPath(productId) {
@@ -147,6 +150,15 @@ function availabilityLabel(value) {
   return labels[value] || value || "Disponibilité inconnue";
 }
 
+function priceWarningLabel(value) {
+  const labels = {
+    large_gap_between_merchants: "Prix suspect",
+    missing_source_document: "Source manquante",
+    ok: "",
+  };
+  return labels[value] || value || "";
+}
+
 function productIcon(product) {
   const text = `${product.title} ${product.category_path || ""}`.toLowerCase();
   if (text.includes("lenovo") || text.includes("portable") || text.includes("pc")) return "💻";
@@ -189,12 +201,14 @@ function buildSearchParams() {
   if (minPrice) params.set("min_price", minPrice);
   if (maxPrice) params.set("max_price", maxPrice);
   if (appState.merchant) params.set("merchant", appState.merchant);
+  if (appState.category) params.set("category", appState.category);
 
   return params;
 }
 
 async function searchProducts(options = {}) {
   const { autoSelect = true } = options;
+  setProductPageLayout(false);
   syncNavigation();
   const params = buildSearchParams();
   const query = params.get("q");
@@ -302,8 +316,13 @@ async function selectProduct(productId, options = {}) {
   }
 }
 
+function setProductPageLayout(isProduct) {
+  layout?.classList.toggle("is-product-page", isProduct);
+}
+
 async function loadProductRoute(productId) {
   syncNavigation();
+  setProductPageLayout(true);
   appState.selectedProductId = productId;
   renderMerchantFilters();
   setLoading();
@@ -391,6 +410,7 @@ function findDemoProduct(products) {
 }
 
 async function loadOpsRoute() {
+  setProductPageLayout(false);
   syncNavigation();
   appState.selectedProductId = null;
   appState.products = [];
@@ -662,6 +682,7 @@ async function renderOpsOfferAudit() {
 
 function renderOfferAuditRow(offer) {
   const source = offer.source_document;
+  const warningLabel = priceWarningLabel(offer.price_warning);
   return `
     <article class="offer-audit-row">
       <div class="offer-audit-main">
@@ -674,6 +695,7 @@ function renderOfferAuditRow(offer) {
       </div>
       <div class="offer-audit-actions">
         <strong>${formatPrice(offer.total_amount)}</strong>
+        ${warningLabel ? `<span class="price-warning-badge">${escapeHtml(warningLabel)}</span>` : ""}
         ${offer.is_stale ? `<span class="stale-badge">Ancien</span>` : ""}
         <a class="copy-link-button" href="/ui/product/${encodeURIComponent(offer.product_id)}">Produit</a>
         <a class="copy-link-button" href="${escapeHtml(offer.product_url)}" target="_blank" rel="noreferrer">Offre</a>
@@ -760,20 +782,34 @@ function renderStaleOfferRow(offer) {
 
 function renderDetail(product, offers) {
   const sortedOffers = [...offers].sort((a, b) => {
+    if (Boolean(a.is_price_quarantined) !== Boolean(b.is_price_quarantined)) {
+      return a.is_price_quarantined ? 1 : -1;
+    }
     const totalA = a.price_amount + a.shipping_amount;
     const totalB = b.price_amount + b.shipping_amount;
     return totalA - totalB;
   });
 
-  const bestTotal = sortedOffers.length
-    ? sortedOffers[0].price_amount + sortedOffers[0].shipping_amount
+  const bestOffer = sortedOffers.find((offer) => !offer.is_price_quarantined) || null;
+  const bestTotal = bestOffer
+    ? bestOffer.price_amount + bestOffer.shipping_amount
     : product.price_min;
+
+  const isProductPage = layout?.classList.contains("is-product-page");
+  const categoryBreadcrumb = product.category_path
+    ? `<div class="category-breadcrumb">${product.category_path.split("/").map((part) => `<span>${escapeHtml(part)}</span>`).join("")}</div>`
+    : "";
+  const backButton = isProductPage
+    ? `<button class="back-to-search" id="back-to-search" type="button">← Retour à la recherche</button>`
+    : "";
 
   detailPanel.innerHTML = `
     <div class="detail-content">
+      ${backButton}
       <section class="detail-hero">
         <span class="thumb" aria-hidden="true">${productIcon(product)}</span>
         <div>
+          ${categoryBreadcrumb}
           <p class="eyebrow">${product.brand || "Produit"}</p>
           <h2>${product.title}</h2>
           <div class="meta-row">
@@ -814,7 +850,7 @@ function renderDetail(product, offers) {
       </div>
 
       <div class="offer-list">
-        ${sortedOffers.map((offer, index) => renderOffer(offer, index === 0)).join("")}
+        ${sortedOffers.map((offer) => renderOffer(offer, bestOffer?.offer_id === offer.offer_id)).join("")}
       </div>
     </div>
   `;
@@ -826,10 +862,16 @@ function renderDetail(product, offers) {
 
 function bindDetailActions(productId) {
   const copyButton = document.querySelector("[data-copy-product-link]");
-  if (!copyButton || !productId) return;
+  if (copyButton && productId) {
+    copyButton.addEventListener("click", () => {
+      copyProductLink(productId, copyButton);
+    });
+  }
 
-  copyButton.addEventListener("click", () => {
-    copyProductLink(productId, copyButton);
+  document.querySelector("#back-to-search")?.addEventListener("click", () => {
+    setProductPageLayout(false);
+    history.pushState({}, "", "/ui/");
+    searchProducts();
   });
 }
 
@@ -942,12 +984,14 @@ function renderOffer(offer, isBest) {
   const total = offer.price_amount + offer.shipping_amount;
   const merchantName = offer.merchant_name || offer.merchant_slug || offer.merchant_id.slice(0, 8);
   const merchantStyleKey = offer.merchant_slug || merchantName;
+  const warningLabel = priceWarningLabel(offer.price_warning);
 
   return `
     <article class="offer-card ${isBest ? "is-best" : ""}">
       <div class="offer-top">
         <span class="merchant-chip ${merchantClass(merchantStyleKey)}">${merchantName}</span>
         ${isBest ? `<span class="best-badge">Meilleur prix</span>` : `<span class="stock-badge">${availabilityLabel(offer.availability)}</span>`}
+        ${warningLabel ? `<span class="price-warning-badge">${offer.is_price_quarantined ? "Quarantaine" : escapeHtml(warningLabel)}</span>` : ""}
         ${offer.is_stale ? `<span class="stale-badge">Crawl ancien</span>` : ""}
       </div>
       <div class="offer-source-line">Vu le ${formatShortDate(offer.last_seen_at)}</div>
@@ -1158,6 +1202,41 @@ function renderMerchantFilters() {
   });
 }
 
+async function loadFacets() {
+  if (!categoryList) return;
+  try {
+    const response = await fetch("/search/facets");
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    renderCategoryChips(data.categories || []);
+  } catch {
+    categoryList.innerHTML = `<span class="subtle">Catégories indisponibles</span>`;
+  }
+}
+
+function renderCategoryChips(categories) {
+  if (!categoryList) return;
+  if (categories.length === 0) {
+    categoryList.innerHTML = `<span class="subtle">Aucune catégorie</span>`;
+    return;
+  }
+  categoryList.innerHTML = categories.map((cat) => {
+    const label = cat.value.split("/").pop();
+    const isActive = cat.value === appState.category;
+    return `<button class="category-chip ${isActive ? "is-active" : ""}" data-category="${escapeHtml(cat.value)}" title="${escapeHtml(cat.value)}" type="button">${escapeHtml(label)} <small>(${cat.count})</small></button>`;
+  }).join("");
+  categoryList.querySelectorAll(".category-chip").forEach((button) => {
+    button.addEventListener("click", () => {
+      const next = button.dataset.category;
+      appState.category = appState.category === next ? null : next;
+      appState.selectedProductId = null;
+      resetRouteToSearch();
+      renderCategoryChips(categories);
+      searchProducts();
+    });
+  });
+}
+
 async function loadCrawlStatus() {
   if (!crawlStatus) return;
   const token = savedOpsAdminToken();
@@ -1303,6 +1382,7 @@ window.addEventListener("popstate", () => {
 
 const initialProductId = currentRouteProductId();
 loadCrawlStatus();
+loadFacets();
 if (initialProductId) {
   loadProductRoute(initialProductId);
 } else if (isDemoRoute()) {

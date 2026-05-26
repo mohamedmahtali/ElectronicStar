@@ -26,6 +26,7 @@ class ProductSearchItem(BaseModel):
     canonical_key: str
     title: str
     brand: str | None
+    category_path: str | None
     price_min: float | None
     price_max: float | None
     latest_seen_at: str | None
@@ -41,11 +42,38 @@ class SearchResponse(BaseModel):
     items: list[ProductSearchItem]
 
 
+class FacetItem(BaseModel):
+    value: str
+    count: int
+
+
+class FacetsResponse(BaseModel):
+    categories: list[FacetItem]
+
+
+@router.get("/facets", response_model=FacetsResponse)
+async def search_facets(es=Depends(get_es_client)):
+    result = await es.search(
+        index=PRODUCTS_INDEX_READ_ALIAS,
+        body={
+            "size": 0,
+            "aggs": {
+                "categories": {"terms": {"field": "category_path", "size": 50}}
+            },
+        },
+    )
+    buckets = result["aggregations"]["categories"]["buckets"]
+    return FacetsResponse(
+        categories=[FacetItem(value=b["key"], count=b["doc_count"]) for b in buckets]
+    )
+
+
 @router.get("/products", response_model=SearchResponse)
 async def search_products(
     q: Annotated[str, Query(min_length=1, description="Requête texte")],
     brand: str | None = None,
     merchant: str | None = None,
+    category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -61,6 +89,8 @@ async def search_products(
     if merchant:
         merchant_filter_id = await _resolve_merchant_id(db, merchant)
         filters.append({"term": {"merchant_ids": merchant_filter_id or merchant}})
+    if category:
+        filters.append({"term": {"category_path": category}})
     if min_price is not None or max_price is not None:
         price_range: dict = {}
         if min_price is not None:
@@ -97,6 +127,7 @@ async def search_products(
                 canonical_key=source.get("canonical_key", ""),
                 title=source.get("title", ""),
                 brand=source.get("brand"),
+                category_path=source.get("category_path"),
                 price_min=source.get("price_min"),
                 price_max=source.get("price_max"),
                 latest_seen_at=latest_seen_at.isoformat() if latest_seen_at else None,

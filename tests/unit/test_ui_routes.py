@@ -69,6 +69,8 @@ def test_ui_ops_route_lists_offer_audit():
     assert "Audit prix" in js
     assert "function renderOpsOfferAudit" in js
     assert "function exportOpsOfferAuditCsv" in js
+    assert "function priceWarningLabel" in js
+    assert "price-warning-badge" in js
     assert "ops-export-audit-csv-button" in js
 
 
@@ -96,3 +98,4 @@ def test_ui_styles_include_responsive_ops_polish():
     assert "@media (max-width: 760px)" in css
     assert ".ops-detail-row" in css
     assert ".detail-actions" in css
+    assert ".price-warning-badge" in css
