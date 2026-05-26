@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.src.db.models import Merchant, Offer, PriceHistory, Product
 from apps.api.src.db.session import get_db
 from apps.api.src.services.freshness import as_utc, is_stale, source_age_hours
+from apps.api.src.services.price_quality import (
+    build_price_context,
+    is_price_quarantined,
+    price_warning_for_offer,
+)
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -30,6 +35,8 @@ class OfferOut(BaseModel):
     last_seen_at: str
     source_age_hours: float | None
     is_stale: bool
+    price_warning: str
+    is_price_quarantined: bool
 
 
 class OffersResponse(BaseModel):
@@ -82,7 +89,9 @@ async def get_product_detail(
     db: AsyncSession = Depends(get_db),
 ):
     product, offers = await _load_product_and_offers(product_id, db)
-    prices = [offer.price_amount for offer, _merchant in offers]
+    quality_by_offer_id = _offer_quality_by_id(offers)
+    eligible_offers = _eligible_offer_rows(offers, quality_by_offer_id)
+    prices = [offer.price_amount for offer, _merchant in eligible_offers]
     merchants_by_id = {
         str(merchant.id): ProductMerchantOut(
             merchant_id=str(merchant.id),
@@ -107,7 +116,7 @@ async def get_product_detail(
         latest_seen_at=latest_seen_at.isoformat() if latest_seen_at else None,
         is_stale=is_stale(latest_seen_at),
         merchants=list(merchants_by_id.values()),
-        offers=_serialize_offers(offers),
+        offers=_serialize_offers(offers, quality_by_offer_id=quality_by_offer_id),
     )
 
 
@@ -146,10 +155,11 @@ async def get_product_offers(
     db: AsyncSession = Depends(get_db),
 ):
     _product, offers = await _load_product_and_offers(product_id, db)
+    quality_by_offer_id = _offer_quality_by_id(offers)
 
     return OffersResponse(
         product_id=str(product_id),
-        offers=_serialize_offers(offers),
+        offers=_serialize_offers(offers, quality_by_offer_id=quality_by_offer_id),
     )
 
 
@@ -159,7 +169,11 @@ async def export_product_offers_csv(
     db: AsyncSession = Depends(get_db),
 ):
     product, offers = await _load_product_and_offers(product_id, db)
-    serialized_offers = _serialize_offers(offers)
+    quality_by_offer_id = _offer_quality_by_id(offers)
+    serialized_offers = _serialize_offers(
+        offers,
+        quality_by_offer_id=quality_by_offer_id,
+    )
 
     return _csv_response(
         filename=f"electronicstar-offers-{product_id}.csv",
@@ -180,6 +194,32 @@ async def _load_product_and_offers(
     )
     offers = list(offers_result.all())
     return product, offers
+
+
+def _offer_quality_by_id(
+    offers: list[tuple[Offer, Merchant]],
+) -> dict[str, str]:
+    offer_models = [offer for offer, _merchant in offers]
+    price_context = build_price_context(offer_models)
+    return {
+        str(offer.id): price_warning_for_offer(
+            offer,
+            price_context=price_context,
+            has_source_document=True,
+        )
+        for offer in offer_models
+    }
+
+
+def _eligible_offer_rows(
+    offers: list[tuple[Offer, Merchant]],
+    quality_by_offer_id: dict[str, str],
+) -> list[tuple[Offer, Merchant]]:
+    return [
+        (offer, merchant)
+        for offer, merchant in offers
+        if not is_price_quarantined(quality_by_offer_id.get(str(offer.id)))
+    ]
 
 
 async def _load_product(product_id: uuid.UUID, db: AsyncSession) -> Product:
@@ -203,10 +243,15 @@ async def _load_price_history(
     return list(result.all())
 
 
-def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
+def _serialize_offers(
+    offers: list[tuple[Offer, Merchant]],
+    *,
+    quality_by_offer_id: dict[str, str] | None = None,
+) -> list[OfferOut]:
     output = []
     for offer, merchant in offers:
         last_seen_at = as_utc(offer.last_seen_at)
+        price_warning = (quality_by_offer_id or {}).get(str(offer.id), "ok")
         output.append(
             OfferOut(
                 offer_id=str(offer.id),
@@ -222,6 +267,8 @@ def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
                 last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
                 source_age_hours=source_age_hours(last_seen_at),
                 is_stale=is_stale(last_seen_at),
+                price_warning=price_warning,
+                is_price_quarantined=is_price_quarantined(price_warning),
             )
         )
     return output
@@ -270,6 +317,8 @@ def _offers_csv(product: Product, offers: list[OfferOut]) -> str:
             "condition",
             "product_url",
             "last_seen_at",
+            "price_warning",
+            "is_price_quarantined",
         ],
         [
             [
@@ -288,6 +337,8 @@ def _offers_csv(product: Product, offers: list[OfferOut]) -> str:
                 offer.condition,
                 offer.product_url,
                 offer.last_seen_at,
+                offer.price_warning,
+                str(offer.is_price_quarantined).lower(),
             ]
             for offer in offers
         ],

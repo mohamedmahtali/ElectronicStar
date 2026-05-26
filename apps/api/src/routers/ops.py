@@ -23,6 +23,7 @@ from apps.api.src.services.freshness import (
     offer_stale_after_hours,
     source_age_hours,
 )
+from apps.api.src.services.price_quality import price_warning_for_offer
 
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
 
@@ -145,6 +146,7 @@ class OfferAuditOut(BaseModel):
     last_seen_at: str
     source_age_hours: float | None
     is_stale: bool
+    price_warning: str
     source_document: RawDocumentOut | None
 
 
@@ -216,9 +218,10 @@ async def list_offer_audit(
     db: AsyncSession = Depends(get_db),
 ):
     rows, total = await _load_offer_audit(db, limit=limit)
+    price_context = await _load_offer_audit_price_context(db, rows)
     return OfferAuditResponse(
         total=total,
-        offers=_serialize_offer_audit(rows),
+        offers=_serialize_offer_audit(rows, price_context=price_context),
     )
 
 
@@ -228,7 +231,8 @@ async def export_offer_audit_csv(
     db: AsyncSession = Depends(get_db),
 ):
     rows, _total = await _load_offer_audit(db, limit=limit)
-    offers = _serialize_offer_audit(rows)
+    price_context = await _load_offer_audit_price_context(db, rows)
+    offers = _serialize_offer_audit(rows, price_context=price_context)
 
     return _csv_response(
         filename="electronicstar-offer-audit.csv",
@@ -384,6 +388,29 @@ async def _load_offer_audit(
     return rows, total
 
 
+async def _load_offer_audit_price_context(
+    db: AsyncSession,
+    rows: list[tuple[Offer, Product, Merchant, RawDocument | None]],
+) -> dict[str, list[tuple[str, float]]]:
+    product_ids = {offer.product_id for offer, _product, _merchant, _document in rows}
+    if not product_ids:
+        return {}
+
+    result = await db.execute(
+        select(
+            Offer.product_id,
+            Offer.id,
+            Offer.price_amount,
+            Offer.shipping_amount,
+        ).where(Offer.product_id.in_(product_ids))
+    )
+    context: dict[str, list[tuple[str, float]]] = {}
+    for product_id, offer_id, price_amount, shipping_amount in result.all():
+        total = float(price_amount) + float(shipping_amount)
+        context.setdefault(str(product_id), []).append((str(offer_id), total))
+    return context
+
+
 async def _load_offer_source_document(
     db: AsyncSession,
     offer: Offer,
@@ -535,7 +562,9 @@ def _serialize_stale_offers(
 
 
 def _serialize_offer_audit(
-    rows: list[tuple[Offer, Product, Merchant, RawDocument | None]]
+    rows: list[tuple[Offer, Product, Merchant, RawDocument | None]],
+    *,
+    price_context: dict[str, list[tuple[str, float]]] | None = None,
 ) -> list[OfferAuditOut]:
     output = []
     for offer, product, merchant, source_document in rows:
@@ -565,10 +594,28 @@ def _serialize_offer_audit(
                 last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
                 source_age_hours=source_age_hours(last_seen_at),
                 is_stale=is_stale(last_seen_at),
+                price_warning=_price_warning(
+                    offer=offer,
+                    source_document=source_document,
+                    price_context=price_context or {},
+                ),
                 source_document=serialized_source,
             )
         )
     return output
+
+
+def _price_warning(
+    *,
+    offer: Offer,
+    source_document: RawDocument | None,
+    price_context: dict[str, list[tuple[str, float]]],
+) -> str:
+    return price_warning_for_offer(
+        offer,
+        price_context=price_context,
+        has_source_document=source_document is not None,
+    )
 
 
 def _offer_audit_csv(offers: list[OfferAuditOut]) -> str:
@@ -589,6 +636,7 @@ def _offer_audit_csv(offers: list[OfferAuditOut]) -> str:
             "last_seen_at",
             "source_age_hours",
             "is_stale",
+            "price_warning",
             "raw_document_id",
             "crawl_run_id",
             "raw_document_url",
@@ -620,6 +668,7 @@ def _offer_audit_csv_row(offer: OfferAuditOut) -> list[str]:
         offer.last_seen_at,
         f"{offer.source_age_hours:.3f}" if offer.source_age_hours is not None else "",
         str(offer.is_stale).lower(),
+        offer.price_warning,
         document.raw_document_id if document else "",
         document.crawl_run_id if document else "",
         document.url if document else "",

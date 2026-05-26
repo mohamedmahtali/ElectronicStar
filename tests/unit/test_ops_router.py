@@ -10,6 +10,7 @@ from apps.api.main import app
 from apps.api.src.routers.ops import (
     _offer_audit_csv,
     _manual_output_path,
+    _price_warning,
     _request_queue,
     _serialize_offer_audit,
     _serialize_crawl_runs,
@@ -188,6 +189,68 @@ def test_serialize_offer_audit_includes_price_and_source_document():
     assert item.source_document is not None
     assert item.source_document.raw_document_id == str(source_document.id)
     assert item.source_document.payload_path == source_document.payload_path
+    assert item.price_warning == "ok"
+
+
+def test_serialize_offer_audit_flags_large_price_gap():
+    product_id = uuid.uuid4()
+    merchant_id = uuid.uuid4()
+    last_seen_at = datetime(2026, 5, 26, 8, 30, tzinfo=UTC)
+    offer = SimpleNamespace(
+        id=uuid.uuid4(),
+        product_id=product_id,
+        merchant_id=merchant_id,
+        price_amount=Decimal("399.95"),
+        shipping_amount=Decimal("0"),
+        availability="in_stock",
+        product_url="https://www.ldlc.com/fiche/PB00728588.html",
+        last_seen_at=last_seen_at,
+    )
+    product = SimpleNamespace(
+        id=product_id,
+        canonical_key="gtin:0199271991237",
+        title_display="Lenovo V15 G5 IRL (83GW007KFR)",
+        brand_norm="lenovo",
+    )
+    merchant = SimpleNamespace(
+        id=merchant_id,
+        slug="ldlc",
+        display_name="LDLC",
+    )
+    source_document = SimpleNamespace(
+        id=uuid.uuid4(),
+        crawl_run_id=uuid.uuid4(),
+        merchant_id=merchant_id,
+        url=offer.product_url,
+        doc_type="html",
+        http_status=200,
+        payload_sha256="d" * 64,
+        payload_path="/app/apps/crawler/raw_documents/run/d.html",
+        content_length=23456,
+        stored_at=last_seen_at,
+    )
+
+    serialized = _serialize_offer_audit(
+        [(offer, product, merchant, source_document)],
+        price_context={
+            str(product_id): [
+                (str(offer.id), 399.95),
+                (str(uuid.uuid4()), 499.95),
+            ]
+        },
+    )
+
+    assert serialized[0].price_warning == "large_gap_between_merchants"
+
+
+def test_price_warning_flags_missing_source_document_after_price_checks():
+    offer = SimpleNamespace(id=uuid.uuid4())
+
+    assert _price_warning(
+        offer=offer,
+        source_document=None,
+        price_context={},
+    ) == "missing_source_document"
 
 
 def test_offer_audit_csv_includes_source_document_and_sanitizes_cells():
@@ -208,6 +271,7 @@ def test_offer_audit_csv_includes_source_document_and_sanitizes_cells():
         last_seen_at="2026-05-26T10:00:00+00:00",
         source_age_hours=1.25,
         is_stale=False,
+        price_warning="ok",
         source_document=SimpleNamespace(
             raw_document_id=str(uuid.uuid4()),
             crawl_run_id=str(uuid.uuid4()),
@@ -227,9 +291,10 @@ def test_offer_audit_csv_includes_source_document_and_sanitizes_cells():
     content = _offer_audit_csv([offer])
 
     assert "offer_id,product_id,canonical_key,title,brand,merchant_slug" in content
+    assert "is_stale,price_warning,raw_document_id" in content
     assert "'=Lenovo V15 G5 IRL" in content
     assert "499.95,0.00,499.95" in content
-    assert "false" in content
+    assert "false,ok" in content
     assert "/app/apps/crawler/raw_documents/run/c.html" in content
 
 
