@@ -48,7 +48,7 @@ docker compose exec api python -m apps.api.scripts.es_setup
 ## Démo rapide
 
 La démo stable reset Postgres/Elasticsearch, recharge les fixtures LDLC + Materiel.net,
-puis ouvre automatiquement le produit comparable Lenovo avec deux marchands et un historique de baisse de prix :
+puis ouvre automatiquement le produit comparable Lenovo avec deux marchands et des prix cohérents à 499,95 EUR :
 
 ```bash
 DOCKER_SUDO=1 make demo-reset-ingest
@@ -321,6 +321,20 @@ DOCKER_SUDO=1 make demo-reset-ingest
 ```
 
 Par défaut, cette commande charge les fixtures d'intégration qui prouvent le matching inter-marchands : Lenovo LDLC + Materiel.net, avec `price_min = 499.95` et `price_max = 499.95`.
+
+Pour montrer volontairement l'historique et les badges de baisse de prix sans polluer la démo stable :
+
+```bash
+make demo-price-drop
+```
+
+Si Docker demande les droits root :
+
+```bash
+DOCKER_SUDO=1 make demo-price-drop
+```
+
+Cette variante charge `tests/fixtures/price_drop/ldlc_price_drop.json` après les fixtures normales : LDLC passe alors de `499.95` à `479.95` sur le Lenovo, ce qui crée un scénario de baisse dédié.
 
 Pour recharger les fixtures live plus volumineuses générées par crawl :
 

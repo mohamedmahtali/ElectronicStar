@@ -1,6 +1,6 @@
 DOCKER_COMPOSE = $(if $(DOCKER_SUDO),sudo docker compose,docker compose)
 
-.PHONY: up down build migrate test lint seed es-setup demo-reset-ingest crawl-materiel-demo crawl-materiel-ingest crawl-ldlc-demo crawl-ldlc-ingest scheduler-materiel-up scheduler-materiel-down scheduler-materiel-logs scheduler-materiel-status scheduler-ldlc-up scheduler-ldlc-down scheduler-ldlc-logs scheduler-ldlc-status scheduler-up scheduler-down
+.PHONY: up down build migrate test lint seed es-setup demo-reset-ingest demo-price-drop crawl-materiel-demo crawl-materiel-ingest crawl-ldlc-demo crawl-ldlc-ingest scheduler-materiel-up scheduler-materiel-down scheduler-materiel-logs scheduler-materiel-status scheduler-ldlc-up scheduler-ldlc-down scheduler-ldlc-logs scheduler-ldlc-status scheduler-up scheduler-down
 
 up:
 	@test -f .env || cp .env.example .env
@@ -30,6 +30,9 @@ es-setup:
 
 demo-reset-ingest:
 	./scripts/demo_reset_ingest.sh
+
+demo-price-drop:
+	PRICE_CHANGE_FIXTURE=/app/tests/fixtures/price_drop/ldlc_price_drop.json ./scripts/demo_reset_ingest.sh
 
 crawl-materiel-demo:
 	$(DOCKER_COMPOSE) run --rm crawler python -m apps.crawler.scripts.run_spider materiel --itemcount 20 --output /app/apps/crawler/materiel_crawl_demo.json
