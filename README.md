@@ -240,6 +240,13 @@ curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/offers/<OFFER_ID>/source-document | python3 -m json.tool
 ```
 
+Audit des derniers prix ingeres :
+
+```bash
+curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/offers/audit | python3 -m json.tool
+```
+
 Offres anciennes a rafraichir :
 
 ```bash

@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.src.db.models import CrawlRun, Merchant, Offer, Product, RawDocument
 from apps.api.src.db.session import get_db
-from apps.api.src.services.freshness import as_utc, offer_stale_after_hours, source_age_hours
+from apps.api.src.services.freshness import (
+    as_utc,
+    is_stale,
+    offer_stale_after_hours,
+    source_age_hours,
+)
 
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
 
@@ -120,6 +125,31 @@ class StaleOffersResponse(BaseModel):
     offers: list[StaleOfferOut]
 
 
+class OfferAuditOut(BaseModel):
+    offer_id: str
+    product_id: str
+    canonical_key: str
+    title: str
+    brand: str | None
+    merchant_id: str
+    merchant_slug: str
+    merchant_name: str
+    price_amount: float
+    shipping_amount: float
+    total_amount: float
+    availability: str
+    product_url: str
+    last_seen_at: str
+    source_age_hours: float | None
+    is_stale: bool
+    source_document: RawDocumentOut | None
+
+
+class OfferAuditResponse(BaseModel):
+    total: int
+    offers: list[OfferAuditOut]
+
+
 class CrawlRunTriggerResponse(BaseModel):
     crawl_run_id: str
     merchant_slug: str
@@ -174,6 +204,18 @@ async def list_stale_offers(
         threshold_hours=offer_stale_after_hours(),
         total=total,
         offers=_serialize_stale_offers(rows),
+    )
+
+
+@router.get("/offers/audit", response_model=OfferAuditResponse)
+async def list_offer_audit(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    rows, total = await _load_offer_audit(db, limit=limit)
+    return OfferAuditResponse(
+        total=total,
+        offers=_serialize_offer_audit(rows),
     )
 
 
@@ -298,6 +340,31 @@ async def _load_stale_offers(
         .limit(limit)
     )
     return list(result.all()), total
+
+
+async def _load_offer_audit(
+    db: AsyncSession,
+    *,
+    limit: int,
+) -> tuple[list[tuple[Offer, Product, Merchant, RawDocument | None]], int]:
+    total_result = await db.execute(select(func.count()).select_from(Offer))
+    total = int(total_result.scalar_one())
+
+    offers_result = await db.execute(
+        select(Offer, Product, Merchant)
+        .join(Product, Product.id == Offer.product_id)
+        .join(Merchant, Merchant.id == Offer.merchant_id)
+        .order_by(Offer.last_seen_at.desc(), Merchant.slug, Product.title_display)
+        .limit(limit)
+    )
+
+    rows = []
+    for offer, product, merchant in offers_result.all():
+        source_row = await _load_offer_source_document(db, offer)
+        source_document = source_row[0] if source_row else None
+        rows.append((offer, product, merchant, source_document))
+
+    return rows, total
 
 
 async def _load_offer_source_document(
@@ -445,6 +512,43 @@ def _serialize_stale_offers(
                 product_url=offer.product_url,
                 last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
                 source_age_hours=source_age_hours(last_seen_at),
+            )
+        )
+    return output
+
+
+def _serialize_offer_audit(
+    rows: list[tuple[Offer, Product, Merchant, RawDocument | None]]
+) -> list[OfferAuditOut]:
+    output = []
+    for offer, product, merchant, source_document in rows:
+        last_seen_at = as_utc(offer.last_seen_at)
+        price_amount = float(offer.price_amount)
+        shipping_amount = float(offer.shipping_amount)
+        serialized_source = (
+            _serialize_raw_documents([(source_document, merchant)])[0]
+            if source_document
+            else None
+        )
+        output.append(
+            OfferAuditOut(
+                offer_id=str(offer.id),
+                product_id=str(product.id),
+                canonical_key=product.canonical_key,
+                title=product.title_display,
+                brand=product.brand_norm,
+                merchant_id=str(merchant.id),
+                merchant_slug=merchant.slug,
+                merchant_name=merchant.display_name,
+                price_amount=price_amount,
+                shipping_amount=shipping_amount,
+                total_amount=price_amount + shipping_amount,
+                availability=offer.availability,
+                product_url=offer.product_url,
+                last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
+                source_age_hours=source_age_hours(last_seen_at),
+                is_stale=is_stale(last_seen_at),
+                source_document=serialized_source,
             )
         )
     return output

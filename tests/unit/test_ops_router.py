@@ -10,6 +10,7 @@ from apps.api.main import app
 from apps.api.src.routers.ops import (
     _manual_output_path,
     _request_queue,
+    _serialize_offer_audit,
     _serialize_crawl_runs,
     _serialize_raw_documents,
     _serialize_stale_offers,
@@ -136,6 +137,58 @@ def test_serialize_stale_offers_includes_refresh_metadata():
     assert item.source_age_hours is not None
 
 
+def test_serialize_offer_audit_includes_price_and_source_document():
+    product_id = uuid.uuid4()
+    merchant_id = uuid.uuid4()
+    crawl_run_id = uuid.uuid4()
+    last_seen_at = datetime(2026, 5, 26, 8, 30, tzinfo=UTC)
+    offer = SimpleNamespace(
+        id=uuid.uuid4(),
+        product_id=product_id,
+        merchant_id=merchant_id,
+        price_amount=Decimal("499.95"),
+        shipping_amount=Decimal("0"),
+        availability="in_stock",
+        product_url="https://www.ldlc.com/fiche/PB00728588.html",
+        last_seen_at=last_seen_at,
+    )
+    product = SimpleNamespace(
+        id=product_id,
+        canonical_key="gtin:0199271991237",
+        title_display="Lenovo V15 G5 IRL (83GW007KFR)",
+        brand_norm="lenovo",
+    )
+    merchant = SimpleNamespace(
+        id=merchant_id,
+        slug="ldlc",
+        display_name="LDLC",
+    )
+    source_document = SimpleNamespace(
+        id=uuid.uuid4(),
+        crawl_run_id=crawl_run_id,
+        merchant_id=merchant_id,
+        url=offer.product_url,
+        doc_type="html",
+        http_status=200,
+        payload_sha256="b" * 64,
+        payload_path="/app/apps/crawler/raw_documents/run/b.html",
+        content_length=23456,
+        stored_at=last_seen_at,
+    )
+
+    serialized = _serialize_offer_audit([(offer, product, merchant, source_document)])
+
+    assert len(serialized) == 1
+    item = serialized[0]
+    assert item.offer_id == str(offer.id)
+    assert item.product_id == str(product_id)
+    assert item.total_amount == 499.95
+    assert item.last_seen_at == last_seen_at.isoformat()
+    assert item.source_document is not None
+    assert item.source_document.raw_document_id == str(source_document.id)
+    assert item.source_document.payload_path == source_document.payload_path
+
+
 def test_manual_output_path_supports_ldlc():
     crawl_run_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
 
@@ -203,8 +256,14 @@ def test_ops_routes_include_admin_dependency():
     assert any(
         getattr(route, "path", "") == "/ops/offers/stale" for route in ops_routes
     )
+    assert any(
+        getattr(route, "path", "") == "/ops/offers/audit" for route in ops_routes
+    )
     route_paths = [getattr(route, "path", "") for route in app.router.routes]
     assert route_paths.index("/ops/offers/stale") < route_paths.index(
+        "/ops/offers/{offer_id}/source-document"
+    )
+    assert route_paths.index("/ops/offers/audit") < route_paths.index(
         "/ops/offers/{offer_id}/source-document"
     )
     for route in ops_routes:

@@ -514,6 +514,7 @@ function renderOpsDashboard(runs) {
   });
   document.querySelector("#ops-change-token-button")?.addEventListener("click", changeOpsAdminToken);
   if (latestRun) {
+    renderOpsOfferAudit();
     renderOpsRawDocuments(latestRun.crawl_run_id);
     renderOpsStaleOffers();
   }
@@ -555,6 +556,15 @@ function renderOpsRunDetail(run) {
         ${renderOpsDetailRow("Ingestion", run.ingest_enabled ? "Active" : "Desactive")}
         ${renderOpsDetailRow("Sortie", run.output_path || "N/A")}
         ${run.error_message ? renderOpsDetailRow("Erreur", run.error_message) : ""}
+      </div>
+    </section>
+    <section class="price-history" id="ops-offer-audit-panel">
+      <div class="offers-head">
+        <h3>Audit prix</h3>
+        <span id="ops-offer-audit-count">Chargement</span>
+      </div>
+      <div class="offer-audit-list" id="ops-offer-audit-body">
+        <div class="skeleton skeleton--compact"></div>
       </div>
     </section>
     <section class="price-history" id="ops-raw-documents-panel">
@@ -620,6 +630,51 @@ function renderRawDocumentRow(document) {
       <div class="raw-document-meta">
         <span>${formatBytes(document.content_length)}</span>
         <span>${document.payload_sha256.slice(0, 10)}</span>
+      </div>
+    </article>
+  `;
+}
+
+async function renderOpsOfferAudit() {
+  const count = document.querySelector("#ops-offer-audit-count");
+  const body = document.querySelector("#ops-offer-audit-body");
+  const token = savedOpsAdminToken();
+  if (!count || !body || !token) return;
+
+  try {
+    const response = await fetch("/ops/offers/audit?limit=8", {
+      headers: opsAdminHeaders(token),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    const offers = data.offers || [];
+    count.textContent = `${offers.length} / ${data.total || 0} offres`;
+    body.innerHTML = offers.length
+      ? offers.map(renderOfferAuditRow).join("")
+      : `<div class="history-empty">Aucune offre a auditer.</div>`;
+  } catch (error) {
+    count.textContent = "Erreur";
+    body.innerHTML = `<div class="history-empty">Audit prix indisponible.</div>`;
+  }
+}
+
+function renderOfferAuditRow(offer) {
+  const source = offer.source_document;
+  return `
+    <article class="offer-audit-row">
+      <div class="offer-audit-main">
+        <div class="offer-audit-title">
+          <span class="merchant-chip ${merchantClass(offer.merchant_slug)}">${escapeHtml(offer.merchant_name)}</span>
+          <strong>${escapeHtml(offer.title)}</strong>
+        </div>
+        <span>${availabilityLabel(offer.availability)} · vu le ${formatShortDate(offer.last_seen_at)}</span>
+        <span>${source ? `source ${source.http_status} · ${formatBytes(source.content_length)} · ${escapeHtml(source.payload_sha256.slice(0, 10))}` : "source manquante"}</span>
+      </div>
+      <div class="offer-audit-actions">
+        <strong>${formatPrice(offer.total_amount)}</strong>
+        ${offer.is_stale ? `<span class="stale-badge">Ancien</span>` : ""}
+        <a class="copy-link-button" href="/ui/product/${encodeURIComponent(offer.product_id)}">Produit</a>
+        <a class="copy-link-button" href="${escapeHtml(offer.product_url)}" target="_blank" rel="noreferrer">Offre</a>
       </div>
     </article>
   `;

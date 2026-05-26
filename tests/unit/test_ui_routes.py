@@ -61,6 +61,14 @@ def test_ui_ops_route_links_raw_documents_endpoint():
     assert "Documents bruts" in js
 
 
+def test_ui_ops_route_lists_offer_audit():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "/ops/offers/audit?limit=8" in js
+    assert "Audit prix" in js
+    assert "function renderOpsOfferAudit" in js
+
+
 def test_ui_ops_route_lists_stale_offers():
     js = (WEB_STATIC_DIR / "app.js").read_text()
 

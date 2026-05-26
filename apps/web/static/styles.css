@@ -995,6 +995,62 @@ p {
   text-align: right;
 }
 
+.offer-audit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.offer-audit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  padding: 10px;
+}
+
+.offer-audit-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.offer-audit-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.offer-audit-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.offer-audit-main span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.offer-audit-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  min-width: 92px;
+}
+
+.offer-audit-actions strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
 .stale-offer-list {
   display: grid;
   gap: 8px;
@@ -1316,12 +1372,18 @@ p {
   }
 
   .raw-document-row,
+  .offer-audit-row,
   .stale-offer-row {
     grid-template-columns: 1fr;
   }
 
   .raw-document-meta,
+  .offer-audit-actions,
   .stale-offer-action {
     text-align: left;
+  }
+
+  .offer-audit-actions {
+    justify-items: stretch;
   }
 }
