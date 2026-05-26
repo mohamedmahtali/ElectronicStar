@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from apps.api.main import app
 from apps.api.src.routers.ops import (
+    _offer_audit_csv,
     _manual_output_path,
     _request_queue,
     _serialize_offer_audit,
@@ -189,6 +190,49 @@ def test_serialize_offer_audit_includes_price_and_source_document():
     assert item.source_document.payload_path == source_document.payload_path
 
 
+def test_offer_audit_csv_includes_source_document_and_sanitizes_cells():
+    offer = SimpleNamespace(
+        offer_id=str(uuid.uuid4()),
+        product_id=str(uuid.uuid4()),
+        canonical_key="mpn:lenovo:83GW007KFR",
+        title="=Lenovo V15 G5 IRL",
+        brand="lenovo",
+        merchant_id=str(uuid.uuid4()),
+        merchant_slug="ldlc",
+        merchant_name="LDLC",
+        price_amount=499.95,
+        shipping_amount=0.0,
+        total_amount=499.95,
+        availability="in_stock",
+        product_url="https://www.ldlc.com/fiche/PB00728588.html",
+        last_seen_at="2026-05-26T10:00:00+00:00",
+        source_age_hours=1.25,
+        is_stale=False,
+        source_document=SimpleNamespace(
+            raw_document_id=str(uuid.uuid4()),
+            crawl_run_id=str(uuid.uuid4()),
+            merchant_id=str(uuid.uuid4()),
+            merchant_slug="ldlc",
+            merchant_name="LDLC",
+            url="https://www.ldlc.com/fiche/PB00728588.html",
+            doc_type="html",
+            http_status=200,
+            payload_sha256="c" * 64,
+            payload_path="/app/apps/crawler/raw_documents/run/c.html",
+            content_length=34567,
+            stored_at="2026-05-26T10:00:01+00:00",
+        ),
+    )
+
+    content = _offer_audit_csv([offer])
+
+    assert "offer_id,product_id,canonical_key,title,brand,merchant_slug" in content
+    assert "'=Lenovo V15 G5 IRL" in content
+    assert "499.95,0.00,499.95" in content
+    assert "false" in content
+    assert "/app/apps/crawler/raw_documents/run/c.html" in content
+
+
 def test_manual_output_path_supports_ldlc():
     crawl_run_id = uuid.UUID("12345678-1234-5678-1234-567812345678")
 
@@ -259,11 +303,17 @@ def test_ops_routes_include_admin_dependency():
     assert any(
         getattr(route, "path", "") == "/ops/offers/audit" for route in ops_routes
     )
+    assert any(
+        getattr(route, "path", "") == "/ops/offers/audit.csv" for route in ops_routes
+    )
     route_paths = [getattr(route, "path", "") for route in app.router.routes]
     assert route_paths.index("/ops/offers/stale") < route_paths.index(
         "/ops/offers/{offer_id}/source-document"
     )
     assert route_paths.index("/ops/offers/audit") < route_paths.index(
+        "/ops/offers/{offer_id}/source-document"
+    )
+    assert route_paths.index("/ops/offers/audit.csv") < route_paths.index(
         "/ops/offers/{offer_id}/source-document"
     )
     for route in ops_routes:

@@ -65,8 +65,11 @@ def test_ui_ops_route_lists_offer_audit():
     js = (WEB_STATIC_DIR / "app.js").read_text()
 
     assert "/ops/offers/audit?limit=8" in js
+    assert "/ops/offers/audit.csv?limit=500" in js
     assert "Audit prix" in js
     assert "function renderOpsOfferAudit" in js
+    assert "function exportOpsOfferAuditCsv" in js
+    assert "ops-export-audit-csv-button" in js
 
 
 def test_ui_ops_route_lists_stale_offers():

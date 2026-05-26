@@ -496,6 +496,7 @@ function renderOpsDashboard(runs) {
             ${CRAWL_MERCHANTS.map((merchant) => `
               <button class="crawl-run-button" data-crawl-merchant="${merchant.slug}" type="button">Relancer ${merchant.name}</button>
             `).join("")}
+            <button class="copy-link-button" id="ops-export-audit-csv-button" type="button">Exporter CSV</button>
             <button class="copy-link-button" id="ops-refresh-button" type="button">Rafraichir</button>
             <button class="copy-link-button" id="ops-change-token-button" type="button">Changer la cle</button>
           </div>
@@ -512,6 +513,7 @@ function renderOpsDashboard(runs) {
     loadOpsRoute();
     loadCrawlStatus();
   });
+  document.querySelector("#ops-export-audit-csv-button")?.addEventListener("click", exportOpsOfferAuditCsv);
   document.querySelector("#ops-change-token-button")?.addEventListener("click", changeOpsAdminToken);
   if (latestRun) {
     renderOpsOfferAudit();
@@ -678,6 +680,39 @@ function renderOfferAuditRow(offer) {
       </div>
     </article>
   `;
+}
+
+async function exportOpsOfferAuditCsv() {
+  const token = savedOpsAdminToken();
+  if (!token) {
+    changeOpsAdminToken();
+    return;
+  }
+
+  try {
+    const response = await fetch("/ops/offers/audit.csv?limit=500", {
+      headers: opsAdminHeaders(token),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = csvFilenameFromResponse(response) || "electronicstar-offer-audit.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    setStateCard("error", "Export indisponible", "Impossible de generer le CSV d'audit des offres.");
+  }
+}
+
+function csvFilenameFromResponse(response) {
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return match ? match[1] : "";
 }
 
 async function renderOpsStaleOffers() {

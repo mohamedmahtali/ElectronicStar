@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import secrets
@@ -7,6 +9,7 @@ from pathlib import PurePosixPath
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 from sqlalchemy import func, select
@@ -216,6 +219,20 @@ async def list_offer_audit(
     return OfferAuditResponse(
         total=total,
         offers=_serialize_offer_audit(rows),
+    )
+
+
+@router.get("/offers/audit.csv")
+async def export_offer_audit_csv(
+    limit: int = Query(default=500, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+):
+    rows, _total = await _load_offer_audit(db, limit=limit)
+    offers = _serialize_offer_audit(rows)
+
+    return _csv_response(
+        filename="electronicstar-offer-audit.csv",
+        content=_offer_audit_csv(offers),
     )
 
 
@@ -554,7 +571,93 @@ def _serialize_offer_audit(
     return output
 
 
+def _offer_audit_csv(offers: list[OfferAuditOut]) -> str:
+    return _write_csv(
+        [
+            "offer_id",
+            "product_id",
+            "canonical_key",
+            "title",
+            "brand",
+            "merchant_slug",
+            "merchant_name",
+            "price_amount",
+            "shipping_amount",
+            "total_amount",
+            "availability",
+            "product_url",
+            "last_seen_at",
+            "source_age_hours",
+            "is_stale",
+            "raw_document_id",
+            "crawl_run_id",
+            "raw_document_url",
+            "raw_document_status",
+            "raw_document_path",
+            "raw_document_sha256",
+            "raw_document_content_length",
+            "raw_document_stored_at",
+        ],
+        [_offer_audit_csv_row(offer) for offer in offers],
+    )
+
+
+def _offer_audit_csv_row(offer: OfferAuditOut) -> list[str]:
+    document = offer.source_document
+    return [
+        offer.offer_id,
+        offer.product_id,
+        offer.canonical_key,
+        offer.title,
+        offer.brand or "",
+        offer.merchant_slug,
+        offer.merchant_name,
+        f"{offer.price_amount:.2f}",
+        f"{offer.shipping_amount:.2f}",
+        f"{offer.total_amount:.2f}",
+        offer.availability,
+        offer.product_url,
+        offer.last_seen_at,
+        f"{offer.source_age_hours:.3f}" if offer.source_age_hours is not None else "",
+        str(offer.is_stale).lower(),
+        document.raw_document_id if document else "",
+        document.crawl_run_id if document else "",
+        document.url if document else "",
+        str(document.http_status) if document else "",
+        document.payload_path if document and document.payload_path else "",
+        document.payload_sha256 if document else "",
+        str(document.content_length) if document else "",
+        document.stored_at if document else "",
+    ]
+
+
 def _duration_seconds(started_at: datetime, ended_at: datetime | None) -> float | None:
     if ended_at is None:
         return None
     return round((ended_at - started_at).total_seconds(), 3)
+
+
+def _write_csv(headers: list[str], rows: list[list[str]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    writer.writerows([_sanitize_csv_row(row) for row in rows])
+    return output.getvalue()
+
+
+def _sanitize_csv_row(row: list[str]) -> list[str]:
+    return [_sanitize_csv_cell(cell) for cell in row]
+
+
+def _sanitize_csv_cell(value: str) -> str:
+    if value.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
+def _csv_response(filename: str, content: str) -> Response:
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
