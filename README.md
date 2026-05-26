@@ -178,6 +178,7 @@ CRAWLER_LDLC_ITEMCOUNT=20
 CRAWLER_LDLC_REQUEST_QUEUE=crawler:run_requests:ldlc
 CRAWLER_LOG_LEVEL=INFO
 RAW_DOCUMENTS_DIR=/app/apps/crawler/raw_documents
+OFFER_STALE_AFTER_HOURS=24
 OPS_ADMIN_TOKEN=change-me-local-admin-token
 ```
 
@@ -186,6 +187,10 @@ brutes sont sauvegardées sous `RAW_DOCUMENTS_DIR` et référencées dans
 Postgres (`raw_documents`) avec URL, statut HTTP, hash SHA-256, taille et chemin
 du payload. Cela permet d'auditer un prix affiché en remontant à la réponse
 source capturée pendant le crawl.
+
+Les prix courants utilisent la date réelle de crawl comme `last_seen_at`.
+Par défaut, l'interface marque une offre comme `Crawl ancien` au-delà de
+`OFFER_STALE_AFTER_HOURS`.
 
 ## API
 

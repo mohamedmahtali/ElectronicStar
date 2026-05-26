@@ -1,6 +1,7 @@
 import csv
 import io
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.src.db.models import Merchant, Offer, PriceHistory, Product
 from apps.api.src.db.session import get_db
+from apps.api.src.services.freshness import as_utc, is_stale, source_age_hours
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -26,6 +28,8 @@ class OfferOut(BaseModel):
     condition: str
     product_url: str
     last_seen_at: str
+    source_age_hours: float | None
+    is_stale: bool
 
 
 class OffersResponse(BaseModel):
@@ -49,6 +53,8 @@ class ProductDetailResponse(BaseModel):
     category_path: str | None
     price_min: float | None
     price_max: float | None
+    latest_seen_at: str | None
+    is_stale: bool
     merchants: list[ProductMerchantOut]
     offers: list[OfferOut]
 
@@ -86,6 +92,8 @@ async def get_product_detail(
         for _offer, merchant in offers
     }
 
+    latest_seen_at = _latest_seen_at([offer for offer, _merchant in offers])
+
     return ProductDetailResponse(
         product_id=str(product.id),
         canonical_key=product.canonical_key,
@@ -96,6 +104,8 @@ async def get_product_detail(
         category_path=product.category_path,
         price_min=float(min(prices)) if prices else None,
         price_max=float(max(prices)) if prices else None,
+        latest_seen_at=latest_seen_at.isoformat() if latest_seen_at else None,
+        is_stale=is_stale(latest_seen_at),
         merchants=list(merchants_by_id.values()),
         offers=_serialize_offers(offers),
     )
@@ -194,22 +204,33 @@ async def _load_price_history(
 
 
 def _serialize_offers(offers: list[tuple[Offer, Merchant]]) -> list[OfferOut]:
-    return [
-        OfferOut(
-            offer_id=str(offer.id),
-            merchant_id=str(offer.merchant_id),
-            merchant_slug=merchant.slug,
-            merchant_name=merchant.display_name,
-            seller_name=offer.seller_name,
-            price_amount=float(offer.price_amount),
-            shipping_amount=float(offer.shipping_amount),
-            availability=offer.availability,
-            condition=offer.condition,
-            product_url=offer.product_url,
-            last_seen_at=offer.last_seen_at.isoformat(),
+    output = []
+    for offer, merchant in offers:
+        last_seen_at = as_utc(offer.last_seen_at)
+        output.append(
+            OfferOut(
+                offer_id=str(offer.id),
+                merchant_id=str(offer.merchant_id),
+                merchant_slug=merchant.slug,
+                merchant_name=merchant.display_name,
+                seller_name=offer.seller_name,
+                price_amount=float(offer.price_amount),
+                shipping_amount=float(offer.shipping_amount),
+                availability=offer.availability,
+                condition=offer.condition,
+                product_url=offer.product_url,
+                last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
+                source_age_hours=source_age_hours(last_seen_at),
+                is_stale=is_stale(last_seen_at),
+            )
         )
-        for offer, merchant in offers
-    ]
+    return output
+
+
+def _latest_seen_at(offers: list[Offer]) -> datetime | None:
+    seen_at = [as_utc(offer.last_seen_at) for offer in offers]
+    values = [value for value in seen_at if value is not None]
+    return max(values) if values else None
 
 
 def _serialize_price_history(

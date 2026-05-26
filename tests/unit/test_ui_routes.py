@@ -67,6 +67,7 @@ def test_ui_offer_cards_link_source_documents():
     assert "data-offer-source-id" in js
     assert "/source-document" in js
     assert "Source crawl" in js
+    assert "Crawl ancien" in js
 
 
 def test_ui_styles_include_responsive_ops_polish():

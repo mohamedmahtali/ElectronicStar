@@ -2,7 +2,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import case, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from apps.api.src.db.models import (
     ProductAlias,
     MatchReviewQueue,
 )
+from apps.api.src.services.freshness import as_utc
 from libs.crawling.schemas import ParsedOffer
 from libs.matcher.engine import DBPort
 
@@ -122,8 +123,8 @@ class ProductRepository(DBPort):
     async def upsert_offer(
         self, product_id: uuid.UUID, merchant_id: uuid.UUID, offer: ParsedOffer
     ) -> uuid.UUID:
-        now = datetime.now(UTC)
-        stmt = pg_insert(Offer).values(
+        seen_at = _source_seen_at(offer.crawled_at)
+        insert_stmt = pg_insert(Offer).values(
             id=uuid.uuid4(),
             product_id=product_id,
             merchant_id=merchant_id,
@@ -135,18 +136,42 @@ class ProductRepository(DBPort):
             condition=offer.condition,
             product_url=offer.product_url,
             fingerprint=offer.fingerprint,
-            first_seen_at=now,
-            last_seen_at=now,
-        ).on_conflict_do_update(
+            first_seen_at=seen_at,
+            last_seen_at=seen_at,
+        )
+        incoming_is_newer = insert_stmt.excluded.last_seen_at >= Offer.last_seen_at
+
+        stmt = insert_stmt.on_conflict_do_update(
             index_elements=["fingerprint"],
             set_={
-                "price_amount": offer.price_amount,
-                "shipping_amount": offer.shipping_amount,
-                "availability": offer.availability,
-                "condition": offer.condition,
-                "currency": offer.currency,
-                "product_url": offer.product_url,
-                "last_seen_at": now,
+                "price_amount": case(
+                    (incoming_is_newer, insert_stmt.excluded.price_amount),
+                    else_=Offer.price_amount,
+                ),
+                "shipping_amount": case(
+                    (incoming_is_newer, insert_stmt.excluded.shipping_amount),
+                    else_=Offer.shipping_amount,
+                ),
+                "availability": case(
+                    (incoming_is_newer, insert_stmt.excluded.availability),
+                    else_=Offer.availability,
+                ),
+                "condition": case(
+                    (incoming_is_newer, insert_stmt.excluded.condition),
+                    else_=Offer.condition,
+                ),
+                "currency": case(
+                    (incoming_is_newer, insert_stmt.excluded.currency),
+                    else_=Offer.currency,
+                ),
+                "product_url": case(
+                    (incoming_is_newer, insert_stmt.excluded.product_url),
+                    else_=Offer.product_url,
+                ),
+                "last_seen_at": case(
+                    (incoming_is_newer, insert_stmt.excluded.last_seen_at),
+                    else_=Offer.last_seen_at,
+                ),
             },
         ).returning(Offer.id)
         result = await self._s.execute(stmt)
@@ -157,7 +182,7 @@ class ProductRepository(DBPort):
     async def append_price_history(self, offer_id: uuid.UUID, offer: ParsedOffer) -> None:
         entry = PriceHistory(
             offer_id=offer_id,
-            captured_at=offer.crawled_at,
+            captured_at=_source_seen_at(offer.crawled_at),
             price_amount=offer.price_amount,
             shipping_amount=offer.shipping_amount,
             availability=offer.availability,
@@ -177,3 +202,7 @@ def _make_canonical_key(offer: ParsedOffer) -> str:
     if offer.mpn and offer.brand_norm:
         return f"mpn:{offer.brand_norm}:{offer.mpn}"
     return f"title:{offer.brand_norm or ''}:{offer.title_norm[:80]}"
+
+
+def _source_seen_at(value: datetime) -> datetime:
+    return as_utc(value) or datetime.now(UTC)

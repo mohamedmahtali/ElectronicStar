@@ -242,6 +242,7 @@ function renderResults(products) {
           <span class="meta-row">
             ${product.brand ? `<span class="brand-chip">${product.brand}</span>` : ""}
             <span class="stock-badge">En stock</span>
+            ${product.is_stale ? `<span class="stale-badge">Crawl ancien</span>` : ""}
             <span class="range-badge">${label}</span>
             ${renderSearchMerchantChips(product)}
           </span>
@@ -635,6 +636,7 @@ function renderDetail(product, offers) {
           <div class="meta-row">
             <span class="range-badge">${product.canonical_key}</span>
             <span class="stock-badge">En stock</span>
+            ${product.is_stale ? `<span class="stale-badge">Crawl ancien</span>` : ""}
           </div>
           <div class="detail-price">${formatPrice(bestTotal)}</div>
           <div class="price-range">Fourchette ${formatPrice(product.price_min)} - ${formatPrice(product.price_max)}</div>
@@ -803,7 +805,9 @@ function renderOffer(offer, isBest) {
       <div class="offer-top">
         <span class="merchant-chip ${merchantClass(merchantStyleKey)}">${merchantName}</span>
         ${isBest ? `<span class="best-badge">Meilleur prix</span>` : `<span class="stock-badge">${availabilityLabel(offer.availability)}</span>`}
+        ${offer.is_stale ? `<span class="stale-badge">Crawl ancien</span>` : ""}
       </div>
+      <div class="offer-source-line">Vu le ${formatShortDate(offer.last_seen_at)}</div>
       <div class="offer-money">
         <div>
           <div class="money-label">Produit</div>

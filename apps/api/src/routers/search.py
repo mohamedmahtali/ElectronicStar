@@ -1,4 +1,5 @@
 from typing import Annotated
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from apps.api.src.db.models import Merchant
 from apps.api.src.db.session import get_db
 from apps.api.src.search.es_client import get_es_client
 from apps.api.src.search.es_mappings import PRODUCTS_INDEX_READ_ALIAS
+from apps.api.src.services.freshness import as_utc, is_stale
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -26,6 +28,8 @@ class ProductSearchItem(BaseModel):
     brand: str | None
     price_min: float | None
     price_max: float | None
+    latest_seen_at: str | None
+    is_stale: bool
     merchant_ids: list[str]
     merchants: list[SearchMerchantOut]
 
@@ -83,23 +87,28 @@ async def search_products(
         for merchant_id in hit["_source"].get("merchant_ids", [])
     }
     merchants_by_id = await _merchant_lookup(db, merchant_ids)
-    items = [
-        ProductSearchItem(
-            product_id=h["_source"].get("product_id", h["_id"]),
-            canonical_key=h["_source"].get("canonical_key", ""),
-            title=h["_source"].get("title", ""),
-            brand=h["_source"].get("brand"),
-            price_min=h["_source"].get("price_min"),
-            price_max=h["_source"].get("price_max"),
-            merchant_ids=h["_source"].get("merchant_ids", []),
-            merchants=[
-                merchants_by_id[merchant_id]
-                for merchant_id in h["_source"].get("merchant_ids", [])
-                if merchant_id in merchants_by_id
-            ],
+    items = []
+    for hit in hits["hits"]:
+        source = hit["_source"]
+        latest_seen_at = _latest_seen_at(source.get("offers", []))
+        items.append(
+            ProductSearchItem(
+                product_id=source.get("product_id", hit["_id"]),
+                canonical_key=source.get("canonical_key", ""),
+                title=source.get("title", ""),
+                brand=source.get("brand"),
+                price_min=source.get("price_min"),
+                price_max=source.get("price_max"),
+                latest_seen_at=latest_seen_at.isoformat() if latest_seen_at else None,
+                is_stale=is_stale(latest_seen_at),
+                merchant_ids=source.get("merchant_ids", []),
+                merchants=[
+                    merchants_by_id[merchant_id]
+                    for merchant_id in source.get("merchant_ids", [])
+                    if merchant_id in merchants_by_id
+                ],
+            )
         )
-        for h in hits["hits"]
-    ]
 
     return SearchResponse(total=hits["total"]["value"], page=page, size=size, items=items)
 
@@ -126,3 +135,9 @@ async def _merchant_lookup(
         )
         for merchant in merchants
     }
+
+
+def _latest_seen_at(offers: list[dict]) -> datetime | None:
+    seen_at = [as_utc(offer.get("last_seen_at")) for offer in offers]
+    values = [value for value in seen_at if value is not None]
+    return max(values) if values else None
