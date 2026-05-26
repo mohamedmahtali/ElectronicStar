@@ -515,6 +515,7 @@ function renderOpsDashboard(runs) {
   document.querySelector("#ops-change-token-button")?.addEventListener("click", changeOpsAdminToken);
   if (latestRun) {
     renderOpsRawDocuments(latestRun.crawl_run_id);
+    renderOpsStaleOffers();
   }
 }
 
@@ -565,6 +566,15 @@ function renderOpsRunDetail(run) {
         <div class="skeleton skeleton--compact"></div>
       </div>
     </section>
+    <section class="price-history" id="ops-stale-offers-panel">
+      <div class="offers-head">
+        <h3>Offres a rafraichir</h3>
+        <span id="ops-stale-offers-count">Chargement</span>
+      </div>
+      <div class="stale-offer-list" id="ops-stale-offers-body">
+        <div class="skeleton skeleton--compact"></div>
+      </div>
+    </section>
   `;
 }
 
@@ -611,6 +621,49 @@ function renderRawDocumentRow(document) {
         <span>${formatBytes(document.content_length)}</span>
         <span>${document.payload_sha256.slice(0, 10)}</span>
       </div>
+    </article>
+  `;
+}
+
+async function renderOpsStaleOffers() {
+  const count = document.querySelector("#ops-stale-offers-count");
+  const body = document.querySelector("#ops-stale-offers-body");
+  const token = savedOpsAdminToken();
+  if (!count || !body || !token) return;
+
+  try {
+    const response = await fetch("/ops/offers/stale?limit=8", {
+      headers: opsAdminHeaders(token),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    const offers = data.offers || [];
+    count.textContent = `${offers.length} / ${data.total || 0} anciennes`;
+    body.innerHTML = offers.length
+      ? offers.map(renderStaleOfferRow).join("")
+      : `<div class="history-empty">Aucune offre ancienne a rafraichir.</div>`;
+    body.querySelectorAll("[data-crawl-merchant]").forEach((button) => {
+      button.addEventListener("click", triggerCrawlRun);
+    });
+  } catch (error) {
+    count.textContent = "Erreur";
+    body.innerHTML = `<div class="history-empty">Offres anciennes indisponibles.</div>`;
+  }
+}
+
+function renderStaleOfferRow(offer) {
+  const merchantName = offer.merchant_name || merchantDisplayName(offer.merchant_slug);
+  return `
+    <article class="stale-offer-row">
+      <div class="stale-offer-main">
+        <strong>${escapeHtml(offer.title)}</strong>
+        <span>
+          ${escapeHtml(merchantName)} · vu le ${formatShortDate(offer.last_seen_at)} · ${formatPrice(offer.total_amount)}
+        </span>
+      </div>
+      <button class="copy-link-button stale-offer-action" data-crawl-merchant="${escapeHtml(offer.merchant_slug)}" type="button">
+        Relancer ${escapeHtml(merchantName)}
+      </button>
     </article>
   `;
 }

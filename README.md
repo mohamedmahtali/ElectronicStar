@@ -240,6 +240,13 @@ curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
   http://localhost:8000/ops/offers/<OFFER_ID>/source-document | python3 -m json.tool
 ```
 
+Offres anciennes a rafraichir :
+
+```bash
+curl -s -H "X-Admin-Token: $OPS_ADMIN_TOKEN" \
+  http://localhost:8000/ops/offers/stale | python3 -m json.tool
+```
+
 Relancer un marchand via le scheduler :
 
 ```bash

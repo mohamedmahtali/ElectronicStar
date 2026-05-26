@@ -2,18 +2,19 @@ import json
 import os
 import secrets
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.src.db.models import CrawlRun, Merchant, Offer, RawDocument
+from apps.api.src.db.models import CrawlRun, Merchant, Offer, Product, RawDocument
 from apps.api.src.db.session import get_db
+from apps.api.src.services.freshness import as_utc, offer_stale_after_hours, source_age_hours
 
 DEFAULT_REQUEST_QUEUE = "crawler:run_requests"
 
@@ -95,6 +96,30 @@ class OfferSourceDocumentResponse(BaseModel):
     document: RawDocumentOut | None
 
 
+class StaleOfferOut(BaseModel):
+    offer_id: str
+    product_id: str
+    canonical_key: str
+    title: str
+    brand: str | None
+    merchant_id: str
+    merchant_slug: str
+    merchant_name: str
+    price_amount: float
+    shipping_amount: float
+    total_amount: float
+    availability: str
+    product_url: str
+    last_seen_at: str
+    source_age_hours: float | None
+
+
+class StaleOffersResponse(BaseModel):
+    threshold_hours: float
+    total: int
+    offers: list[StaleOfferOut]
+
+
 class CrawlRunTriggerResponse(BaseModel):
     crawl_run_id: str
     merchant_slug: str
@@ -136,6 +161,19 @@ async def list_crawl_run_documents(
     return RawDocumentsResponse(
         crawl_run_id=str(crawl_run_id),
         documents=_serialize_raw_documents(rows),
+    )
+
+
+@router.get("/offers/stale", response_model=StaleOffersResponse)
+async def list_stale_offers(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    rows, total = await _load_stale_offers(db, limit=limit)
+    return StaleOffersResponse(
+        threshold_hours=offer_stale_after_hours(),
+        total=total,
+        offers=_serialize_stale_offers(rows),
     )
 
 
@@ -238,6 +276,28 @@ async def _load_raw_documents(
         .limit(limit)
     )
     return list(result.all())
+
+
+async def _load_stale_offers(
+    db: AsyncSession,
+    *,
+    limit: int,
+) -> tuple[list[tuple[Offer, Product, Merchant]], int]:
+    stale_before = datetime.now(UTC) - timedelta(hours=offer_stale_after_hours())
+    total_result = await db.execute(
+        select(func.count()).select_from(Offer).where(Offer.last_seen_at < stale_before)
+    )
+    total = int(total_result.scalar_one())
+
+    result = await db.execute(
+        select(Offer, Product, Merchant)
+        .join(Product, Product.id == Offer.product_id)
+        .join(Merchant, Merchant.id == Offer.merchant_id)
+        .where(Offer.last_seen_at < stale_before)
+        .order_by(Offer.last_seen_at.asc(), Merchant.slug, Product.title_display)
+        .limit(limit)
+    )
+    return list(result.all()), total
 
 
 async def _load_offer_source_document(
@@ -358,6 +418,36 @@ def _serialize_raw_documents(
         )
         for document, merchant in rows
     ]
+
+
+def _serialize_stale_offers(
+    rows: list[tuple[Offer, Product, Merchant]]
+) -> list[StaleOfferOut]:
+    output = []
+    for offer, product, merchant in rows:
+        last_seen_at = as_utc(offer.last_seen_at)
+        price_amount = float(offer.price_amount)
+        shipping_amount = float(offer.shipping_amount)
+        output.append(
+            StaleOfferOut(
+                offer_id=str(offer.id),
+                product_id=str(product.id),
+                canonical_key=product.canonical_key,
+                title=product.title_display,
+                brand=product.brand_norm,
+                merchant_id=str(merchant.id),
+                merchant_slug=merchant.slug,
+                merchant_name=merchant.display_name,
+                price_amount=price_amount,
+                shipping_amount=shipping_amount,
+                total_amount=price_amount + shipping_amount,
+                availability=offer.availability,
+                product_url=offer.product_url,
+                last_seen_at=last_seen_at.isoformat() if last_seen_at else "",
+                source_age_hours=source_age_hours(last_seen_at),
+            )
+        )
+    return output
 
 
 def _duration_seconds(started_at: datetime, ended_at: datetime | None) -> float | None:

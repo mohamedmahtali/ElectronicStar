@@ -61,6 +61,14 @@ def test_ui_ops_route_links_raw_documents_endpoint():
     assert "Documents bruts" in js
 
 
+def test_ui_ops_route_lists_stale_offers():
+    js = (WEB_STATIC_DIR / "app.js").read_text()
+
+    assert "/ops/offers/stale?limit=8" in js
+    assert "Offres a rafraichir" in js
+    assert "function renderOpsStaleOffers" in js
+
+
 def test_ui_offer_cards_link_source_documents():
     js = (WEB_STATIC_DIR / "app.js").read_text()
 
