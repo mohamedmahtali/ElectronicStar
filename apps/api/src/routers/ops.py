@@ -15,7 +15,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.src.db.models import CrawlRun, Merchant, Offer, Product, RawDocument
+from apps.api.src.db.models import CrawlRun, MatchReviewQueue, Merchant, Offer, Product, RawDocument
 from apps.api.src.db.session import get_db
 from apps.api.src.services.freshness import (
     as_utc,
@@ -162,6 +162,27 @@ class CrawlRunTriggerResponse(BaseModel):
     queued: bool
 
 
+class MatchReviewItemOut(BaseModel):
+    review_id: str
+    candidate_payload: dict
+    candidate_scores: dict
+    decision: str | None
+    reviewed_by: str | None
+    reviewed_at: str | None
+    created_at: str
+
+
+class MatchReviewResponse(BaseModel):
+    total: int
+    pending: int
+    items: list[MatchReviewItemOut]
+
+
+class DecideReviewIn(BaseModel):
+    decision: str
+    reviewed_by: str = "ops-admin"
+
+
 @router.get("/crawl-runs", response_model=CrawlRunsResponse)
 async def list_crawl_runs(
     limit: int = Query(default=20, ge=1, le=100),
@@ -238,6 +259,60 @@ async def export_offer_audit_csv(
         filename="electronicstar-offer-audit.csv",
         content=_offer_audit_csv(offers),
     )
+
+
+@router.get("/match-review", response_model=MatchReviewResponse)
+async def list_match_review(
+    pending_only: bool = True,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    total_result = await db.execute(select(func.count()).select_from(MatchReviewQueue))
+    total = int(total_result.scalar_one())
+
+    pending_result = await db.execute(
+        select(func.count()).select_from(MatchReviewQueue).where(MatchReviewQueue.decision.is_(None))
+    )
+    pending = int(pending_result.scalar_one())
+
+    query = select(MatchReviewQueue).order_by(MatchReviewQueue.created_at.desc()).limit(limit)
+    if pending_only:
+        query = (
+            select(MatchReviewQueue)
+            .where(MatchReviewQueue.decision.is_(None))
+            .order_by(MatchReviewQueue.created_at.desc())
+            .limit(limit)
+        )
+    result = await db.execute(query)
+    items = list(result.scalars().all())
+
+    return MatchReviewResponse(
+        total=total,
+        pending=pending,
+        items=_serialize_match_review_items(items),
+    )
+
+
+@router.post("/match-review/{review_id}/decide", status_code=status.HTTP_200_OK)
+async def decide_match_review(
+    review_id: uuid.UUID,
+    body: DecideReviewIn,
+    db: AsyncSession = Depends(get_db),
+):
+    if body.decision not in ("approved", "rejected"):
+        raise HTTPException(status_code=422, detail="Decision invalide : 'approved' ou 'rejected'")
+
+    item = await db.get(MatchReviewQueue, review_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item de revue introuvable")
+    if item.decision is not None:
+        raise HTTPException(status_code=409, detail=f"Deja traite : {item.decision}")
+
+    item.decision = body.decision
+    item.reviewed_by = body.reviewed_by
+    item.reviewed_at = datetime.now(UTC)
+    await db.commit()
+    return {"status": "ok", "review_id": str(review_id), "decision": body.decision}
 
 
 @router.get(
@@ -702,6 +777,21 @@ def _sanitize_csv_cell(value: str) -> str:
     if value.startswith(("=", "+", "-", "@")):
         return f"'{value}"
     return value
+
+
+def _serialize_match_review_items(items: list[MatchReviewQueue]) -> list[MatchReviewItemOut]:
+    return [
+        MatchReviewItemOut(
+            review_id=str(item.id),
+            candidate_payload=item.candidate_payload,
+            candidate_scores=item.candidate_scores,
+            decision=item.decision,
+            reviewed_by=item.reviewed_by,
+            reviewed_at=item.reviewed_at.isoformat() if item.reviewed_at else None,
+            created_at=item.created_at.isoformat(),
+        )
+        for item in items
+    ]
 
 
 def _csv_response(filename: str, content: str) -> Response:

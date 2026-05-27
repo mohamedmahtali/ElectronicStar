@@ -29,6 +29,8 @@ const appState = {
   merchant: null,
   category: null,
   sort: null,
+  page: 1,
+  totalResults: 0,
 };
 
 function productDetailPath(productId) {
@@ -194,6 +196,7 @@ function buildSearchParams() {
   const params = new URLSearchParams();
   params.set("q", input.value.trim() || "xiaomi");
   params.set("size", "20");
+  params.set("page", String(appState.page));
 
   const brand = brandFilter.value.trim();
   const minPrice = minPriceFilter.value.trim();
@@ -210,7 +213,12 @@ function buildSearchParams() {
 }
 
 async function searchProducts(options = {}) {
-  const { autoSelect = true } = options;
+  const { autoSelect = true, appendResults = false } = options;
+  if (!appendResults) {
+    appState.page = 1;
+    appState.totalResults = 0;
+    appState.products = [];
+  }
   setProductPageLayout(false);
   syncNavigation();
   const params = buildSearchParams();
@@ -219,23 +227,26 @@ async function searchProducts(options = {}) {
   activeQuery.textContent = `query: ${query}`;
   renderMerchantFilters();
   syncSortSelect();
-  setLoading();
+  if (!appendResults) setLoading();
 
   try {
     const response = await fetch(`/search/products?${params.toString()}`);
     if (!response.ok) throw new Error(`API ${response.status}`);
     const data = await response.json();
 
-    appState.products = data.items;
+    appState.products = appendResults
+      ? [...appState.products, ...data.items]
+      : data.items;
+    appState.totalResults = data.total;
     resultCount.textContent = `${data.total} ${data.total > 1 ? "produits" : "produit"}`;
-    renderResults(data.items);
+    renderResults(appState.products);
 
-    if (data.items.length === 0) {
+    if (appState.products.length === 0) {
       setStateCard("empty", "Aucun résultat", "Essaie une autre marque, une référence MPN ou un budget plus large.");
     } else {
       clearMessages();
       if (autoSelect && !appState.selectedProductId) {
-        selectProduct(data.items[0].product_id, { updateUrl: false });
+        selectProduct(appState.products[0].product_id, { updateUrl: false });
       }
     }
   } catch (error) {
@@ -280,6 +291,18 @@ function renderResults(products) {
       selectProduct(link.dataset.productId);
     });
   });
+
+  const remaining = appState.totalResults - appState.products.length;
+  if (remaining > 0) {
+    resultList.insertAdjacentHTML(
+      "beforeend",
+      `<button class="load-more-button" id="load-more-button" type="button">Charger plus · ${appState.products.length} / ${appState.totalResults} produits</button>`
+    );
+    document.querySelector("#load-more-button")?.addEventListener("click", () => {
+      appState.page++;
+      searchProducts({ appendResults: true, autoSelect: false });
+    });
+  }
 }
 
 function renderSearchMerchantChips(product) {
@@ -527,6 +550,15 @@ function renderOpsDashboard(runs) {
         </div>
       </section>
       ${latestRun ? renderOpsRunDetail(latestRun) : `<div class="history-empty">Aucun run a detailler.</div>`}
+      <section class="price-history" id="ops-match-review-panel">
+        <div class="offers-head">
+          <h3>Revue matching</h3>
+          <span id="ops-match-review-count">Chargement</span>
+        </div>
+        <div class="match-review-list" id="ops-match-review-body">
+          <div class="skeleton skeleton--compact"></div>
+        </div>
+      </section>
     </div>
   `;
 
@@ -544,6 +576,7 @@ function renderOpsDashboard(runs) {
     renderOpsRawDocuments(latestRun.crawl_run_id);
     renderOpsStaleOffers();
   }
+  renderOpsMatchReview();
 }
 
 function renderOpsRunCard(run) {
@@ -782,6 +815,76 @@ function renderStaleOfferRow(offer) {
       </button>
     </article>
   `;
+}
+
+async function renderOpsMatchReview() {
+  const count = document.querySelector("#ops-match-review-count");
+  const body = document.querySelector("#ops-match-review-body");
+  const token = savedOpsAdminToken();
+  if (!count || !body || !token) return;
+
+  try {
+    const response = await fetch("/ops/match-review?pending_only=true&limit=20", {
+      headers: opsAdminHeaders(token),
+    });
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    const data = await response.json();
+    count.textContent = `${data.pending} en attente · ${data.total} total`;
+    body.innerHTML = data.items.length
+      ? data.items.map(renderMatchReviewRow).join("")
+      : `<div class="history-empty">Aucun match en attente de validation.</div>`;
+    body.querySelectorAll("[data-decision]").forEach((btn) => {
+      btn.addEventListener("click", () => decideMatchReview(btn.dataset.reviewId, btn.dataset.decision));
+    });
+  } catch (error) {
+    count.textContent = "Erreur";
+    body.innerHTML = `<div class="history-empty">File de revue indisponible.</div>`;
+  }
+}
+
+function renderMatchReviewRow(item) {
+  const payload = item.candidate_payload || {};
+  const title = payload.title_raw || payload.title_norm || "(titre inconnu)";
+  const meta = [payload.brand_norm, payload.merchant_slug, payload.price_amount != null ? formatPrice(Number(payload.price_amount)) : null]
+    .filter(Boolean).map(escapeHtml).join(" · ");
+  return `
+    <article class="match-review-row">
+      <div class="match-review-main">
+        <strong>${escapeHtml(title)}</strong>
+        ${meta ? `<span>${meta}</span>` : ""}
+        <span>Soumis le ${formatShortDate(item.created_at)}</span>
+      </div>
+      <div class="match-review-actions">
+        <button class="match-approve-button" data-review-id="${item.review_id}" data-decision="approved" type="button">Approuver</button>
+        <button class="match-reject-button" data-review-id="${item.review_id}" data-decision="rejected" type="button">Rejeter</button>
+      </div>
+    </article>
+  `;
+}
+
+async function decideMatchReview(reviewId, decision) {
+  const token = savedOpsAdminToken();
+  if (!token || !reviewId) return;
+
+  const approveBtn = document.querySelector(`[data-review-id="${reviewId}"][data-decision="approved"]`);
+  const rejectBtn = document.querySelector(`[data-review-id="${reviewId}"][data-decision="rejected"]`);
+  [approveBtn, rejectBtn].forEach((btn) => { if (btn) btn.disabled = true; });
+
+  try {
+    const response = await fetch(`/ops/match-review/${encodeURIComponent(reviewId)}/decide`, {
+      method: "POST",
+      headers: { ...opsAdminHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    if (response.status === 401 || response.status === 403) {
+      forgetOpsAdminToken();
+      throw new Error("Token invalide");
+    }
+    if (!response.ok) throw new Error(`API ${response.status}`);
+    await renderOpsMatchReview();
+  } catch (error) {
+    [approveBtn, rejectBtn].forEach((btn) => { if (btn) btn.disabled = false; });
+  }
 }
 
 function renderDetail(product, offers) {

@@ -12,6 +12,7 @@ from apps.api.src.routers.ops import (
     _manual_output_path,
     _price_warning,
     _request_queue,
+    _serialize_match_review_items,
     _serialize_offer_audit,
     _serialize_crawl_runs,
     _serialize_raw_documents,
@@ -358,6 +359,48 @@ def test_require_ops_admin_token_accepts_valid_token(monkeypatch):
     assert require_ops_admin_token("secret") is None
 
 
+def test_serialize_match_review_items_includes_payload_and_decision():
+    item = SimpleNamespace(
+        id=uuid.uuid4(),
+        candidate_payload={"title_raw": "Lenovo V15 G5", "merchant_slug": "ldlc", "price_amount": "499.95"},
+        candidate_scores={"abc123": 0.87},
+        decision=None,
+        reviewed_by=None,
+        reviewed_at=None,
+        created_at=datetime(2026, 5, 27, 10, 0, tzinfo=UTC),
+    )
+
+    result = _serialize_match_review_items([item])
+
+    assert len(result) == 1
+    r = result[0]
+    assert r.review_id == str(item.id)
+    assert r.candidate_payload["title_raw"] == "Lenovo V15 G5"
+    assert r.candidate_scores == {"abc123": 0.87}
+    assert r.decision is None
+    assert r.reviewed_at is None
+    assert r.created_at == "2026-05-27T10:00:00+00:00"
+
+
+def test_serialize_match_review_items_includes_reviewed_decision():
+    reviewed_at = datetime(2026, 5, 27, 11, 30, tzinfo=UTC)
+    item = SimpleNamespace(
+        id=uuid.uuid4(),
+        candidate_payload={"title_raw": "Xiaomi Redmi 14C"},
+        candidate_scores={},
+        decision="approved",
+        reviewed_by="ops-admin",
+        reviewed_at=reviewed_at,
+        created_at=datetime(2026, 5, 27, 10, 0, tzinfo=UTC),
+    )
+
+    result = _serialize_match_review_items([item])
+
+    assert result[0].decision == "approved"
+    assert result[0].reviewed_by == "ops-admin"
+    assert result[0].reviewed_at == reviewed_at.isoformat()
+
+
 def test_ops_routes_include_admin_dependency():
     ops_routes = [
         route for route in app.router.routes if getattr(route, "path", "").startswith("/ops/")
@@ -376,6 +419,12 @@ def test_ops_routes_include_admin_dependency():
     )
     assert any(
         getattr(route, "path", "") == "/ops/offers/audit.csv" for route in ops_routes
+    )
+    assert any(
+        getattr(route, "path", "") == "/ops/match-review" for route in ops_routes
+    )
+    assert any(
+        getattr(route, "path", "") == "/ops/match-review/{review_id}/decide" for route in ops_routes
     )
     route_paths = [getattr(route, "path", "") for route in app.router.routes]
     assert route_paths.index("/ops/offers/stale") < route_paths.index(
