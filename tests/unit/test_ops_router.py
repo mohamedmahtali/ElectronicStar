@@ -244,7 +244,13 @@ def test_serialize_offer_audit_flags_large_price_gap():
 
 
 def test_price_warning_flags_missing_source_document_after_price_checks():
-    offer = SimpleNamespace(id=uuid.uuid4())
+    product_id = uuid.uuid4()
+    offer = SimpleNamespace(
+        id=uuid.uuid4(),
+        product_id=product_id,
+        price_amount=Decimal("0"),
+        shipping_amount=Decimal("0"),
+    )
 
     assert _price_warning(
         offer=offer,

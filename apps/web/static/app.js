@@ -16,6 +16,7 @@ const merchantFilters = document.querySelectorAll(".merchant-filter");
 const topNavLinks = document.querySelectorAll(".top-nav a");
 const categoryList = document.querySelector("#category-list");
 const layout = document.querySelector(".layout");
+const sortSelect = document.querySelector("#sort-select");
 const OPS_ADMIN_TOKEN_STORAGE_KEY = "electronicstar.opsAdminToken";
 const CRAWL_MERCHANTS = [
   { slug: "materiel", name: "Materiel.net" },
@@ -27,6 +28,7 @@ const appState = {
   products: [],
   merchant: null,
   category: null,
+  sort: null,
 };
 
 function productDetailPath(productId) {
@@ -202,6 +204,7 @@ function buildSearchParams() {
   if (maxPrice) params.set("max_price", maxPrice);
   if (appState.merchant) params.set("merchant", appState.merchant);
   if (appState.category) params.set("category", appState.category);
+  if (appState.sort) params.set("sort", appState.sort);
 
   return params;
 }
@@ -215,6 +218,7 @@ async function searchProducts(options = {}) {
   resultTitle.textContent = `Résultats pour « ${query} »`;
   activeQuery.textContent = `query: ${query}`;
   renderMerchantFilters();
+  syncSortSelect();
   setLoading();
 
   try {
@@ -1260,10 +1264,21 @@ crawlRunButtons.forEach((button) => {
   button.addEventListener("click", triggerCrawlRun);
 });
 
+sortSelect?.addEventListener("change", () => {
+  appState.sort = sortSelect.value || null;
+  appState.selectedProductId = null;
+  resetRouteToSearch();
+  searchProducts();
+});
+
 function renderMerchantFilters() {
   merchantFilters.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.merchant === appState.merchant);
   });
+}
+
+function syncSortSelect() {
+  if (sortSelect) sortSelect.value = appState.sort || "";
 }
 
 async function loadFacets() {

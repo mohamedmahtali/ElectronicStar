@@ -76,6 +76,7 @@ async def search_products(
     category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
+    sort: str | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     es=Depends(get_es_client),
@@ -101,14 +102,16 @@ async def search_products(
 
     query = {"bool": {"must": must, "filter": filters}} if filters else {"bool": {"must": must}}
 
-    result = await es.search(
-        index=PRODUCTS_INDEX_READ_ALIAS,
-        body={
-            "query": query,
-            "from": (page - 1) * size,
-            "size": size,
-        },
-    )
+    _SORT_CLAUSES = {
+        "price_asc": [{"price_min": "asc"}],
+        "price_desc": [{"price_min": "desc"}],
+        "newest": [{"updated_at": "desc"}],
+    }
+    body: dict = {"query": query, "from": (page - 1) * size, "size": size}
+    if sort in _SORT_CLAUSES:
+        body["sort"] = _SORT_CLAUSES[sort]
+
+    result = await es.search(index=PRODUCTS_INDEX_READ_ALIAS, body=body)
 
     hits = result["hits"]
     merchant_ids = {

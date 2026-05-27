@@ -89,6 +89,8 @@ def test_offers_csv_includes_product_and_offer_rows():
         condition="new",
         product_url="https://www.ldlc.com/fiche/PB00728588.html",
         last_seen_at="2026-05-25T18:00:00+00:00",
+        price_warning="ok",
+        is_price_quarantined=False,
     )
 
     content = _offers_csv(product, [offer])

@@ -468,6 +468,24 @@ p {
   font-weight: 700;
 }
 
+.sort-select {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px var(--orange-soft);
+}
+
 .state {
   padding: 0 18px;
 }
