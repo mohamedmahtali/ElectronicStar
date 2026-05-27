@@ -235,7 +235,7 @@ async function searchProducts(options = {}) {
     } else {
       clearMessages();
       if (autoSelect && !appState.selectedProductId) {
-        selectProduct(data.items[0].product_id);
+        selectProduct(data.items[0].product_id, { updateUrl: false });
       }
     }
   } catch (error) {
