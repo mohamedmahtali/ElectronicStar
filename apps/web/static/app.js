@@ -1098,9 +1098,7 @@ function renderPriceHistoryBody(points) {
         <strong class="${changeClass(change)}">${change ? formatSignedPrice(change.amount) : "N/A"}</strong>
       </div>
     </div>
-    <div class="history-bars" aria-label="Historique des prix">
-      ${renderHistoryBars(points)}
-    </div>
+    ${renderPriceChart(points)}
     <div class="history-list">
       ${points.slice(-5).reverse().map(renderHistoryPoint).join("")}
     </div>
@@ -1141,22 +1139,88 @@ function changeClass(change) {
   return change.amount < 0 ? "history-change is-good" : "history-change is-bad";
 }
 
-function renderHistoryBars(points) {
-  const visiblePoints = points.slice(-8);
-  const totals = visiblePoints.map((point) => point.total_amount);
-  const min = Math.min(...totals);
-  const max = Math.max(...totals);
-  const spread = Math.max(max - min, 1);
+function renderPriceChart(points) {
+  const W = 560, H = 180;
+  const PAD = { top: 12, right: 16, bottom: 28, left: 56 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
 
-  return visiblePoints.map((point) => {
-    const height = 26 + ((point.total_amount - min) / spread) * 54;
-    return `
-      <div class="history-bar" title="${point.merchant_name} - ${formatPrice(point.total_amount)}">
-        <span style="height: ${height}px"></span>
-        <small>${formatDay(point.captured_at)}</small>
-      </div>
-    `;
+  const byMerchant = new Map();
+  points.forEach((p) => {
+    const entry = byMerchant.get(p.merchant_slug) || { name: p.merchant_name, points: [] };
+    entry.points.push(p);
+    byMerchant.set(p.merchant_slug, entry);
+  });
+
+  const CHART_COLORS = { ldlc: "#0073b7", materiel: "#e8501a" };
+  const FALLBACK = ["#22c55e", "#a855f7", "#eab308"];
+  let colorIdx = 0;
+  const merchantColors = {};
+  for (const slug of byMerchant.keys()) {
+    merchantColors[slug] = CHART_COLORS[slug] || FALLBACK[colorIdx++ % FALLBACK.length];
+  }
+
+  const times = points.map((p) => new Date(p.captured_at).getTime());
+  const tMin = Math.min(...times);
+  const tMax = Math.max(...times);
+  const tSpread = Math.max(tMax - tMin, 1);
+
+  const totals = points.map((p) => p.total_amount);
+  const pMin = Math.min(...totals);
+  const pMax = Math.max(...totals);
+  const pSpread = pMax - pMin;
+  const pPad = pSpread === 0 ? Math.max(pMax * 0.05, 1) : pSpread * 0.2;
+  const yLo = pMin - pPad;
+  const yHi = pMax + pPad;
+  const yRange = yHi - yLo;
+
+  const tx = (t) => PAD.left + ((t - tMin) / tSpread) * plotW;
+  const ty = (p) => PAD.top + (1 - (p - yLo) / yRange) * plotH;
+
+  const yTicks = [0, 1, 2, 3, 4].map((i) => yLo + (i / 4) * yRange);
+  const days = [...new Set(points.map((p) => p.captured_at.slice(0, 10)))];
+  const step = Math.ceil(days.length / 5);
+  const xTickDays = days.filter((_, i) => i % step === 0);
+
+  const gridLines = yTicks.map((v) =>
+    `<line x1="${PAD.left}" y1="${ty(v).toFixed(1)}" x2="${PAD.left + plotW}" y2="${ty(v).toFixed(1)}" stroke="#e8e8e8" stroke-dasharray="3 3" />`
+  ).join("");
+
+  const yLabels = yTicks.map((v) =>
+    `<text x="${PAD.left - 6}" y="${ty(v).toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="#aaa">${formatPrice(v)}</text>`
+  ).join("");
+
+  const xLabels = xTickDays.map((day) => {
+    const x = Math.min(Math.max(tx(new Date(day + "T12:00:00Z").getTime()), PAD.left), PAD.left + plotW);
+    return `<text x="${x.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="#aaa">${formatDay(day + "T12:00:00Z")}</text>`;
   }).join("");
+
+  const series = [...byMerchant.entries()].map(([slug, { points: pts }]) => {
+    const color = merchantColors[slug];
+    const coords = pts.map((p) => `${tx(new Date(p.captured_at).getTime()).toFixed(1)},${ty(p.total_amount).toFixed(1)}`).join(" ");
+    const line = `<polyline fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${coords}" />`;
+    const dots = pts.map((p) => {
+      const cx = tx(new Date(p.captured_at).getTime()).toFixed(1);
+      const cy = ty(p.total_amount).toFixed(1);
+      return `<circle cx="${cx}" cy="${cy}" r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5"><title>${escapeHtml(p.merchant_name)} · ${formatShortDate(p.captured_at)} : ${formatPrice(p.total_amount)}</title></circle>`;
+    }).join("");
+    return line + dots;
+  }).join("");
+
+  const legend = byMerchant.size > 1
+    ? `<div class="chart-legend">${[...byMerchant.entries()].map(([slug, { name }]) =>
+        `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:${merchantColors[slug]}"></span>${escapeHtml(name)}</span>`
+      ).join("")}</div>`
+    : "";
+
+  return `
+    <div class="price-chart-wrap">
+      <svg class="price-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Courbe de prix">
+        ${gridLines}${yLabels}${series}${xLabels}
+      </svg>
+      ${legend}
+    </div>
+  `;
 }
 
 function renderHistoryPoint(point) {
