@@ -166,6 +166,123 @@ services:
       - ./apps/api:/app/apps/api
       - ./libs:/app/libs
 
+  crawler-scheduler-boulanger:
+    build:
+      context: .
+      dockerfile: deploy/docker/crawler.Dockerfile
+    env_file: .env
+    profiles:
+      - scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - python
+      - -m
+      - apps.crawler.scripts.scheduler
+      - --merchant
+      - boulanger
+      - --interval-minutes
+      - ${CRAWLER_BOULANGER_INTERVAL_MINUTES:-60}
+      - --itemcount
+      - ${CRAWLER_BOULANGER_ITEMCOUNT:-20}
+      - --output-dir
+      - /app/apps/crawler/scheduled
+      - --log-level
+      - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --request-queue
+      - ${CRAWLER_BOULANGER_REQUEST_QUEUE:-crawler:run_requests:boulanger}
+      - --request-poll-seconds
+      - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
+      - --ingest
+    volumes:
+      - ./apps/crawler:/app/apps/crawler
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+
+  crawler-scheduler-cybertek:
+    build:
+      context: .
+      dockerfile: deploy/docker/crawler.Dockerfile
+    env_file: .env
+    profiles:
+      - scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - python
+      - -m
+      - apps.crawler.scripts.scheduler
+      - --merchant
+      - cybertek
+      - --interval-minutes
+      - ${CRAWLER_CYBERTEK_INTERVAL_MINUTES:-60}
+      - --itemcount
+      - ${CRAWLER_CYBERTEK_ITEMCOUNT:-20}
+      - --output-dir
+      - /app/apps/crawler/scheduled
+      - --log-level
+      - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --request-queue
+      - ${CRAWLER_CYBERTEK_REQUEST_QUEUE:-crawler:run_requests:cybertek}
+      - --request-poll-seconds
+      - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
+      - --ingest
+    volumes:
+      - ./apps/crawler:/app/apps/crawler
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+
+  crawler-scheduler-grosbill:
+    build:
+      context: .
+      dockerfile: deploy/docker/crawler.Dockerfile
+    env_file: .env
+    profiles:
+      - scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - python
+      - -m
+      - apps.crawler.scripts.scheduler
+      - --merchant
+      - grosbill
+      - --interval-minutes
+      - ${CRAWLER_GROSBILL_INTERVAL_MINUTES:-60}
+      - --itemcount
+      - ${CRAWLER_GROSBILL_ITEMCOUNT:-20}
+      - --output-dir
+      - /app/apps/crawler/scheduled
+      - --log-level
+      - ${CRAWLER_LOG_LEVEL:-INFO}
+      - --request-queue
+      - ${CRAWLER_GROSBILL_REQUEST_QUEUE:-crawler:run_requests:grosbill}
+      - --request-poll-seconds
+      - ${CRAWLER_REQUEST_POLL_SECONDS:-5}
+      - --ingest
+    volumes:
+      - ./apps/crawler:/app/apps/crawler
+      - ./apps/api:/app/apps/api
+      - ./libs:/app/libs
+
   pushgateway:
     image: prom/pushgateway:v1.10.0
     ports:

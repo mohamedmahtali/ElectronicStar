@@ -49,6 +49,13 @@ MERCHANTS = [
         "country_code": "FR",
         "crawl_policy": {"delay": 2.0, "concurrency": 2},
     },
+    {
+        "slug": "grosbill",
+        "display_name": "Grosbill",
+        "base_url": "https://www.grosbill.com",
+        "country_code": "FR",
+        "crawl_policy": {"delay": 2.0, "concurrency": 2},
+    },
 ]
 
 
