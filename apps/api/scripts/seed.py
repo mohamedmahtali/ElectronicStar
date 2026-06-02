@@ -42,6 +42,13 @@ MERCHANTS = [
         "country_code": "FR",
         "crawl_policy": {"delay": 1.5, "concurrency": 2},
     },
+    {
+        "slug": "cybertek",
+        "display_name": "Cybertek",
+        "base_url": "https://www.cybertek.fr",
+        "country_code": "FR",
+        "crawl_policy": {"delay": 2.0, "concurrency": 2},
+    },
 ]
 
 
