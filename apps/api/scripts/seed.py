@@ -28,6 +28,20 @@ MERCHANTS = [
         "country_code": "FR",
         "crawl_policy": {"delay": 2.0, "concurrency": 1},
     },
+    {
+        "slug": "fnac",
+        "display_name": "Fnac",
+        "base_url": "https://www.fnac.com",
+        "country_code": "FR",
+        "crawl_policy": {"delay": 2.5, "concurrency": 1},
+    },
+    {
+        "slug": "boulanger",
+        "display_name": "Boulanger",
+        "base_url": "https://www.boulanger.com",
+        "country_code": "FR",
+        "crawl_policy": {"delay": 1.5, "concurrency": 2},
+    },
 ]
 
 
