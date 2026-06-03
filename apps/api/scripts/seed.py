@@ -56,6 +56,13 @@ MERCHANTS = [
         "country_code": "FR",
         "crawl_policy": {"delay": 2.0, "concurrency": 2},
     },
+    {
+        "slug": "topachat",
+        "display_name": "Top Achat",
+        "base_url": "https://www.topachat.com",
+        "country_code": "FR",
+        "crawl_policy": {"delay": 2.0, "concurrency": 2},
+    },
 ]
 
 
