@@ -1,0 +1,50 @@
+[
+  {
+    "merchant_slug": "materiel",
+    "merchant_sku": "202602240108",
+    "product_url": "https://www.materiel.net/produit/202602240108.html",
+    "source_title": "Lenovo V15 G5 IRL (83GW007KFR)",
+    "brand_raw": "Lenovo",
+    "price_amount": "489.95",
+    "shipping_amount": "0",
+    "currency": "EUR",
+    "availability": "in_stock",
+    "condition": "new",
+    "gtin": "0199271991237",
+    "mpn": "83GW007KFR",
+    "specs": {},
+    "crawled_at": "2026-05-24 14:31:00"
+  },
+  {
+    "merchant_slug": "materiel",
+    "merchant_sku": "202410170035",
+    "product_url": "https://www.materiel.net/produit/202410170035.html",
+    "source_title": "Xiaomi Redmi Buds 6 Play - Noir",
+    "brand_raw": "Xiaomi",
+    "price_amount": "12.95",
+    "shipping_amount": "0",
+    "currency": "EUR",
+    "availability": "in_stock",
+    "condition": "new",
+    "gtin": null,
+    "mpn": "BHR8776GL",
+    "specs": {},
+    "crawled_at": "2026-05-24 14:31:12"
+  },
+  {
+    "merchant_slug": "materiel",
+    "merchant_sku": "202410170037",
+    "product_url": "https://www.materiel.net/produit/202410170037.html",
+    "source_title": "Xiaomi Redmi Buds 6 Play - Blanc",
+    "brand_raw": "Xiaomi",
+    "price_amount": "12.95",
+    "shipping_amount": "0",
+    "currency": "EUR",
+    "availability": "in_stock",
+    "condition": "new",
+    "gtin": null,
+    "mpn": "BHR8773GL",
+    "specs": {},
+    "crawled_at": "2026-05-24 14:31:15"
+  }
+]

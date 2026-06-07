@@ -1,0 +1,9 @@
+scrapy==2.12.0
+Twisted<26
+playwright==1.49.0
+scrapy-playwright==0.0.41
+pydantic==2.10.3
+redis==5.2.0
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+elasticsearch[async]==8.17.0

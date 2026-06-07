@@ -1,0 +1,18 @@
+[
+  {
+    "merchant_slug": "ldlc",
+    "merchant_sku": "AR202602240108",
+    "product_url": "https://www.ldlc.com/fiche/PB00728588.html",
+    "source_title": "Lenovo V15 G5 IRL (83GW007KFR)",
+    "brand_raw": "Lenovo",
+    "price_amount": "479.95",
+    "shipping_amount": "0",
+    "currency": "EUR",
+    "availability": "in_stock",
+    "condition": "new",
+    "gtin": "0199271991237",
+    "mpn": "83GW007KFR",
+    "specs": {},
+    "crawled_at": "2026-05-24 15:30:00"
+  }
+]
